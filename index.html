@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#6f63d9">
+  <meta name="description" content="Baby Tracker - ghi chép sức khỏe, sinh hoạt và phát triển của em bé.">
+  <title>Baby Tracker</title>
+  <link rel="icon" href="./assets/images/baby-placeholder.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/variables.css">
+  <link rel="stylesheet" href="./css/reset.css">
+  <link rel="stylesheet" href="./css/base.css">
+  <link rel="stylesheet" href="./css/layout.css">
+  <link rel="stylesheet" href="./css/components.css">
+  <link rel="stylesheet" href="./css/forms.css">
+  <link rel="stylesheet" href="./css/utilities.css">
+  <link rel="stylesheet" href="./css/responsive.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Bỏ qua đến nội dung chính</a>
+
+  <section id="boot-screen" class="center-screen" aria-live="polite">
+    <div class="brand-mark" aria-hidden="true">BT</div>
+    <h1>Baby Tracker</h1>
+    <p id="boot-message">Đang khởi tạo ứng dụng...</p>
+    <div class="spinner" aria-hidden="true"></div>
+  </section>
+
+  <section id="config-error-screen" class="center-screen hidden" aria-labelledby="config-error-title">
+    <div class="state-illustration" aria-hidden="true">⚙️</div>
+    <h1 id="config-error-title">Chưa cấu hình Firebase</h1>
+    <p>Hãy mở <code>js/firebase-config.js</code>, thay các giá trị bắt đầu bằng <code>YOUR_</code>, sau đó tải lại trang.</p>
+    <details>
+      <summary>Các giá trị cần kiểm tra</summary>
+      <p><code>apiKey</code>, <code>authDomain</code>, <code>projectId</code>, <code>messagingSenderId</code> và <code>appId</code>.</p>
+    </details>
+  </section>
+
+  <section id="login-screen" class="login-screen hidden" aria-labelledby="login-title">
+    <div class="login-card">
+      <div class="brand-mark" aria-hidden="true">BT</div>
+      <p class="eyebrow">SỨC KHỎE & PHÁT TRIỂN</p>
+      <h1 id="login-title">Baby Tracker</h1>
+      <p>Ghi chép tập trung các hoạt động quan trọng của em bé cho gia đình.</p>
+      <button id="google-sign-in-button" class="button button-primary button-large" type="button">
+        <span aria-hidden="true">G</span> Đăng nhập bằng Google
+      </button>
+      <p class="muted small">Chỉ các tài khoản đã được cấp quyền mới có thể sử dụng ứng dụng.</p>
+      <p class="medical-note">Thông tin trong ứng dụng chỉ dùng để ghi chép và tham khảo, không thay thế việc thăm khám hoặc tư vấn của bác sĩ.</p>
+    </div>
+  </section>
+
+  <section id="access-check-screen" class="center-screen hidden" aria-live="polite">
+    <div class="spinner" aria-hidden="true"></div>
+    <h1>Đang kiểm tra quyền truy cập...</h1>
+    <p>Ứng dụng chưa tải dữ liệu sức khỏe ở bước này.</p>
+  </section>
+
+  <div id="app-shell" class="app-shell hidden">
+    <aside class="sidebar" aria-label="Điều hướng chính">
+      <div class="sidebar-brand">
+        <div class="brand-mark brand-mark-small" aria-hidden="true">BT</div>
+        <div><strong>Baby Tracker</strong><span>Family workspace</span></div>
+      </div>
+      <nav id="sidebar-navigation" class="nav-list"></nav>
+      <div class="sidebar-footer">
+        <p class="medical-note compact">Chỉ ghi chép, không thay thế tư vấn y tế.</p>
+      </div>
+    </aside>
+
+    <div class="app-main">
+      <header class="topbar">
+        <div>
+          <p id="current-view-kicker" class="eyebrow">TỔNG QUAN</p>
+          <h1 id="current-view-title">Dashboard</h1>
+        </div>
+        <div class="topbar-actions">
+          <label class="visually-hidden" for="baby-selector">Chọn em bé</label>
+          <select id="baby-selector" class="baby-selector" aria-label="Chọn em bé"></select>
+          <button id="theme-toggle" class="icon-button" type="button" aria-label="Chuyển giao diện sáng tối">◐</button>
+          <button id="user-menu-button" class="avatar-button" type="button" aria-haspopup="menu" aria-expanded="false">
+            <img id="user-avatar" alt="Ảnh tài khoản" referrerpolicy="no-referrer">
+          </button>
+          <div id="user-menu" class="dropdown-menu hidden" role="menu">
+            <div class="dropdown-profile">
+              <strong id="user-name"></strong>
+              <span id="user-email"></span>
+              <span id="user-role" class="badge"></span>
+            </div>
+            <button id="sign-out-button" type="button" role="menuitem">Đăng xuất</button>
+          </div>
+        </div>
+      </header>
+
+      <main id="main-content" class="content" tabindex="-1">
+        <div id="view-container" aria-live="polite"></div>
+      </main>
+
+      <nav id="bottom-navigation" class="bottom-nav" aria-label="Điều hướng di động"></nav>
+    </div>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+  <template id="loading-template">
+    <div class="skeleton-stack" aria-label="Đang tải">
+      <div class="skeleton skeleton-title"></div>
+      <div class="skeleton skeleton-card"></div>
+      <div class="skeleton skeleton-card"></div>
+    </div>
+  </template>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
