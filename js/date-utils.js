@@ -1,7 +1,4 @@
 const DISPLAY_TIME_ZONE = "Asia/Ho_Chi_Minh";
-const dateFormatter = new Intl.DateTimeFormat("vi-VN", { timeZone: DISPLAY_TIME_ZONE, day: "2-digit", month: "2-digit", year: "numeric" });
-const dateTimeFormatter = new Intl.DateTimeFormat("vi-VN", { timeZone: DISPLAY_TIME_ZONE, day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
-
 export function toDate(value) {
   if (!value) return null;
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
@@ -16,13 +13,13 @@ export function toDate(value) {
 }
 
 export function formatDate(value) {
-  const date = toDate(value);
-  return date ? dateFormatter.format(date) : "—";
+  const parts = partsInDisplayZone(value);
+  return parts ? `${parts.day}/${parts.month}/${parts.year}` : "—";
 }
 
 export function formatDateTime(value) {
-  const date = toDate(value);
-  return date ? dateTimeFormatter.format(date) : "—";
+  const parts = partsInDisplayZone(value);
+  return parts ? `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}` : "—";
 }
 
 function partsInDisplayZone(value) {
@@ -31,7 +28,7 @@ function partsInDisplayZone(value) {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: DISPLAY_TIME_ZONE,
     year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", hour12: false
+    hour: "2-digit", minute: "2-digit", hour12: false, hourCycle: "h23"
   });
   return Object.fromEntries(formatter.formatToParts(date).filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
 }
@@ -51,6 +48,45 @@ export function parseLocalInput(value) {
   const normalized = value.length === 10 ? `${value}T00:00:00+07:00` : `${value}:00+07:00`;
   const date = new Date(normalized);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+
+function createDisplayZoneDate(year, month, day, hour = 0, minute = 0) {
+  const values = [year, month, day, hour, minute].map(Number);
+  if (!values.every(Number.isInteger)) return null;
+  const [safeYear, safeMonth, safeDay, safeHour, safeMinute] = values;
+  if (safeYear < 1900 || safeYear > 2200 || safeMonth < 1 || safeMonth > 12 || safeDay < 1 || safeDay > 31 || safeHour < 0 || safeHour > 23 || safeMinute < 0 || safeMinute > 59) return null;
+  const iso = `${String(safeYear).padStart(4, "0")}-${String(safeMonth).padStart(2, "0")}-${String(safeDay).padStart(2, "0")}T${String(safeHour).padStart(2, "0")}:${String(safeMinute).padStart(2, "0")}:00+07:00`;
+  const date = new Date(iso);
+  const parts = partsInDisplayZone(date);
+  if (!parts
+    || Number(parts.year) !== safeYear
+    || Number(parts.month) !== safeMonth
+    || Number(parts.day) !== safeDay
+    || Number(parts.hour) !== safeHour
+    || Number(parts.minute) !== safeMinute) return null;
+  return date;
+}
+
+/**
+ * Parses values exported by Baby Tracker CSV.
+ * Accepts dd/mm/yyyy HH:mm, the legacy HH:mm dd/mm/yyyy output, and ISO-style values.
+ */
+export function parseDisplayDateTime(value) {
+  const text = String(value ?? "").replace(/^\uFEFF/, "").trim();
+  if (!text || text === "—") return null;
+
+  let match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T,]+(\d{1,2}):(\d{2}))?$/);
+  if (match) return createDisplayZoneDate(match[3], match[2], match[1], match[4] || 0, match[5] || 0);
+
+  match = text.match(/^(\d{1,2}):(\d{2})[ T]+(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (match) return createDisplayZoneDate(match[5], match[4], match[3], match[1], match[2]);
+
+  match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ](\d{1,2}):(\d{2})(?::\d{2})?)?$/);
+  if (match) return createDisplayZoneDate(match[1], match[2], match[3], match[4] || 0, match[5] || 0);
+
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 export function startOfLocalDay(date = new Date()) {

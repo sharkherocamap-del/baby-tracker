@@ -44,3 +44,48 @@ export function isWithinRange(value, startDate, endDate) {
   if (endDate && date > new Date(`${endDate}T23:59:59.999`)) return false;
   return true;
 }
+
+
+/**
+ * Parse a CSV string, including quoted commas, escaped quotes and line breaks.
+ * Returns an array of rows, where each row is an array of cell strings.
+ */
+export function parseCsv(text) {
+  const source = String(text ?? "").replace(/^\uFEFF/, "");
+  const rows = [];
+  let row = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === '"') {
+      if (inQuotes && source[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (character === "," && !inQuotes) {
+      row.push(field);
+      field = "";
+      continue;
+    }
+    if ((character === "\n" || character === "\r") && !inQuotes) {
+      row.push(field);
+      if (row.some((cell) => String(cell).trim() !== "")) rows.push(row);
+      row = [];
+      field = "";
+      if (character === "\r" && source[index + 1] === "\n") index += 1;
+      continue;
+    }
+    field += character;
+  }
+
+  if (inQuotes) throw new Error("CSV_UNCLOSED_QUOTE");
+  row.push(field);
+  if (row.some((cell) => String(cell).trim() !== "")) rows.push(row);
+  return rows;
+}
