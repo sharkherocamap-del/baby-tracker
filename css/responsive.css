@@ -5,6 +5,9 @@
   .form-field.full { grid-column: 1 / -1; }
   .quick-actions { grid-template-columns: repeat(4, 1fr); }
   .two-column-grid { grid-template-columns: minmax(0, 1.4fr) minmax(280px, .6fr); }
+  .growth-chart-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .chart-container { height: 250px; }
+  .csv-import-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @media (min-width: 1024px) {
   .app-shell { display: grid; grid-template-columns: var(--sidebar-width) minmax(0, 1fr); }

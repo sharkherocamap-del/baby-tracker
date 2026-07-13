@@ -15,3 +15,5 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--colo
 .modal-header { position: sticky; z-index: 2; top: 0; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem; border-bottom: 1px solid var(--color-border); background: var(--color-surface); }
 .modal-body { padding: 1rem; }
 .modal-close { width: 42px; height: 42px; border: 0; border-radius: 50%; background: var(--color-surface-alt); }
+
+@media (min-width: 1024px) { .modal-panel.modal-large { width: min(1040px, 100%); } }

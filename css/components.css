@@ -52,7 +52,11 @@
 .dropdown-menu button:hover { background: var(--color-surface-alt); }
 .quick-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: .7rem; }
 .quick-action { min-height: 84px; display: grid; justify-items: start; align-content: space-between; padding: .8rem; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); color: var(--color-text); text-align: left; }
-.chart-container { position: relative; min-height: 290px; }
+.growth-chart-grid { grid-template-columns: 1fr; }
+.chart-panel { min-width: 0; display: grid; gap: .55rem; }
+.chart-panel h3 { font-size: .95rem; }
+.chart-container { position: relative; width: 100%; height: clamp(220px, 55vw, 280px); min-height: 0; overflow: hidden; }
+.chart-container canvas { width: 100% !important; height: 100% !important; max-width: none; }
 .timer-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .7rem; margin-bottom: 1rem; padding: 1rem; border-radius: var(--radius-md); background: var(--color-primary-soft); }
 .timer-value { font-size: 1.4rem; font-variant-numeric: tabular-nums; font-weight: 750; color: var(--color-primary); }
 .tooth-grid { display: grid; grid-template-columns: repeat(10, minmax(24px, 1fr)); gap: .3rem; }
@@ -61,3 +65,17 @@
 .activity-list { display: grid; gap: .6rem; }
 .activity-item { display: grid; grid-template-columns: auto 1fr; gap: .7rem; padding-block: .6rem; border-bottom: 1px solid var(--color-border); }
 .activity-item:last-child { border-bottom: 0; }
+
+.csv-import-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
+.csv-import-card > div:first-child { flex: 1 1 320px; }
+.csv-import-preview { display: grid; gap: 1rem; }
+.csv-import-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
+.csv-summary-item { display: grid; gap: .1rem; padding: .75rem; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface-alt); }
+.csv-summary-item strong { font-size: 1.25rem; }
+.csv-summary-item span { color: var(--color-muted); font-size: .75rem; }
+.table-scroll { max-width: 100%; overflow: auto; border: 1px solid var(--color-border); border-radius: 12px; }
+.table-scroll table { width: 100%; min-width: 760px; border-collapse: collapse; background: var(--color-surface); }
+.table-scroll th, .table-scroll td { padding: .7rem .75rem; border-bottom: 1px solid var(--color-border); text-align: left; vertical-align: top; font-size: .8rem; }
+.table-scroll th { position: sticky; top: 0; z-index: 1; background: var(--color-surface-alt); white-space: nowrap; }
+.table-scroll tr:last-child td { border-bottom: 0; }
+.table-scroll .row-warning td { background: color-mix(in srgb, var(--color-warning) 8%, var(--color-surface)); }
