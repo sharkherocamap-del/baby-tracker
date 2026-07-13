@@ -1,6 +1,7 @@
 import { getState, subscribe } from "./app-state.js";
 import { navigate, routes } from "./router.js";
 import { clearElement, createElement } from "./ui.js";
+import { createIcon } from "./icons.js";
 
 const sidebarOrder = ["dashboard", "babies", "growth", "vaccinations", "medical-visits", "feeding", "sleep", "diapers", "symptoms", "medications", "allergies", "milestones", "teething", "reminders", "reports", "users", "settings"];
 const bottomOrder = ["dashboard", "babies", "feeding", "reminders", "settings"];
@@ -9,7 +10,7 @@ let unsubscribeState = null;
 function buildButton(routeName, compact = false) {
   const route = routes[routeName];
   const button = createElement("button", { attrs: { type: "button", "data-route": routeName, "aria-label": route.title } });
-  const icon = createElement("span", { className: "nav-icon", text: route.icon, attrs: { "aria-hidden": "true" } });
+  const icon = createIcon(route.icon, { size: compact ? 23 : 21, className: "nav-icon" });
   const label = createElement("span", { text: compact && routeName === "settings" ? "Thêm" : route.title });
   button.append(icon, label);
   button.addEventListener("click", () => navigate(routeName));

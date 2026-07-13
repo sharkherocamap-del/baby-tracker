@@ -1,4 +1,5 @@
 import { clearElement, createElement } from "./ui.js";
+import { createIcon, setButtonContent } from "./icons.js";
 
 let activeModal = null;
 let previousFocus = null;
@@ -20,7 +21,8 @@ export function openModal({ title, content, size = "medium", closeOnBackdrop = t
   const panel = createElement("section", { className: `modal-panel modal-${size}`, attrs: { role: "dialog", "aria-modal": "true", "aria-labelledby": "modal-title" } });
   const header = createElement("header", { className: "modal-header" });
   const heading = createElement("h2", { text: title, attrs: { id: "modal-title" } });
-  const closeButton = createElement("button", { className: "modal-close", text: "×", attrs: { type: "button", "aria-label": "Đóng" } });
+  const closeButton = createElement("button", { className: "modal-close", attrs: { type: "button", "aria-label": "Đóng" } });
+  closeButton.append(createIcon("close", { size: 22 }));
   closeButton.addEventListener("click", closeModal);
   header.append(heading, closeButton);
   const body = createElement("div", { className: "modal-body" });
@@ -59,8 +61,10 @@ export function confirmDialog({ title = "Xác nhận", message, confirmLabel = "
       content.append(field);
     }
     const actions = createElement("div", { className: "form-actions full" });
-    const cancel = createElement("button", { className: "button button-ghost", text: "Hủy", attrs: { type: "button" } });
-    const confirm = createElement("button", { className: `button ${danger ? "button-danger" : "button-primary"}`, text: confirmLabel, attrs: { type: "button" } });
+    const cancel = createElement("button", { className: "button button-ghost", attrs: { type: "button" } });
+    setButtonContent(cancel, "close", "Hủy");
+    const confirm = createElement("button", { className: `button ${danger ? "button-danger" : "button-primary"}`, attrs: { type: "button" } });
+    setButtonContent(confirm, danger ? "delete" : "check", confirmLabel);
     if (requireText) confirm.disabled = true;
     input?.addEventListener("input", () => { confirm.disabled = input.value.trim() !== requireText; });
     cancel.addEventListener("click", () => { closeModal(); resolve(false); });

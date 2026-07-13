@@ -1,3 +1,5 @@
+import { createIcon } from "./icons.js";
+
 const DEFAULT_DURATION = 4200;
 
 export function showToast(message, type = "info", duration = DEFAULT_DURATION) {
@@ -13,7 +15,7 @@ export function showToast(message, type = "info", duration = DEFAULT_DURATION) {
   close.type = "button";
   close.className = "icon-button";
   close.setAttribute("aria-label", "Đóng thông báo");
-  close.textContent = "×";
+  close.append(createIcon("close", { size: 20 }));
   close.addEventListener("click", () => toast.remove());
 
   toast.append(text, close);

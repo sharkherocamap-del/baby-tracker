@@ -1,3 +1,5 @@
+import { createIllustration, setButtonContent } from "./icons.js";
+
 export function clearElement(element) {
   while (element?.firstChild) element.removeChild(element.firstChild);
 }
@@ -16,17 +18,17 @@ export function renderLoading(container) {
   if (template) container.append(template.content.cloneNode(true));
 }
 
-export function renderEmptyState(container, { icon = "🍼", title = "Chưa có dữ liệu", message = "Hãy thêm bản ghi đầu tiên.", actionLabel = "", onAction = null } = {}) {
+export function renderEmptyState(container, { icon = "inventory_2", title = "Chưa có dữ liệu", message = "Hãy thêm bản ghi đầu tiên.", actionLabel = "", actionIcon = "add", onAction = null } = {}) {
   clearElement(container);
   const wrapper = createElement("div", { className: "empty-state" });
   wrapper.append(
-    createElement("div", { className: "state-illustration", text: icon }),
+    createIllustration(icon),
     createElement("h2", { text: title }),
     createElement("p", { text: message })
   );
   if (actionLabel && onAction) {
-    const button = createElement("button", { className: "button button-primary", text: actionLabel });
-    button.type = "button";
+    const button = createElement("button", { className: "button button-primary", attrs: { type: "button" } });
+    setButtonContent(button, actionIcon, actionLabel);
     button.addEventListener("click", onAction);
     wrapper.append(button);
   }
@@ -37,13 +39,13 @@ export function renderErrorState(container, message, retry) {
   clearElement(container);
   const wrapper = createElement("div", { className: "error-state" });
   wrapper.append(
-    createElement("div", { className: "state-illustration", text: "⚠️" }),
+    createIllustration("error"),
     createElement("h2", { text: "Không thể tải dữ liệu" }),
     createElement("p", { text: message })
   );
   if (retry) {
-    const button = createElement("button", { className: "button button-primary", text: "Thử lại" });
-    button.type = "button";
+    const button = createElement("button", { className: "button button-primary", attrs: { type: "button" } });
+    setButtonContent(button, "refresh", "Thử lại");
     button.addEventListener("click", retry);
     wrapper.append(button);
   }
@@ -59,6 +61,4 @@ export function safeImage(img, url, fallback = "./assets/images/baby-placeholder
   img.addEventListener("error", () => { img.src = fallback; }, { once: true });
 }
 
-export function refreshIcons() {
-  if (window.lucide?.createIcons) window.lucide.createIcons();
-}
+export function refreshIcons() {}

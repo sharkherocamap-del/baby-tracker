@@ -104,14 +104,25 @@ async function handleAuthenticatedUser(user) {
   }
 }
 
+
+function updateThemeToggleIcon() {
+  const icon = document.querySelector("#theme-toggle .material-symbols-rounded");
+  if (!icon) return;
+  const isDark = document.documentElement.dataset.theme === "dark";
+  icon.textContent = isDark ? "light_mode" : "dark_mode";
+  document.getElementById("theme-toggle").setAttribute("aria-label", isDark ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối");
+}
+
 function initializeTheme() {
   const stored = localStorage.getItem("babyTracker.theme");
   const preferred = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   document.documentElement.dataset.theme = stored || preferred;
+  updateThemeToggleIcon();
   document.getElementById("theme-toggle").addEventListener("click", () => {
     const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
     document.documentElement.dataset.theme = next;
     localStorage.setItem("babyTracker.theme", next);
+    updateThemeToggleIcon();
   });
 }
 

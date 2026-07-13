@@ -3,23 +3,23 @@ import { showToast } from "./toast.js";
 import { renderErrorState, renderLoading } from "./ui.js";
 
 export const routes = {
-  dashboard: { title: "Dashboard", kicker: "TỔNG QUAN", icon: "⌂", loader: () => import("./modules/dashboard.js") },
-  babies: { title: "Hồ sơ bé", kicker: "HỒ SƠ", icon: "◉", loader: () => import("./modules/babies.js") },
-  growth: { title: "Tăng trưởng", kicker: "PHÁT TRIỂN", icon: "↗", loader: () => import("./modules/growth.js") },
-  vaccinations: { title: "Tiêm phòng", kicker: "SỨC KHỎE", icon: "✚", loader: () => import("./modules/vaccinations.js") },
-  "medical-visits": { title: "Khám bệnh", kicker: "SỨC KHỎE", icon: "♙", loader: () => import("./modules/medical-visits.js") },
-  feeding: { title: "Ăn uống", kicker: "SINH HOẠT", icon: "◒", loader: () => import("./modules/feeding.js") },
-  sleep: { title: "Giấc ngủ", kicker: "SINH HOẠT", icon: "☾", loader: () => import("./modules/sleep.js") },
-  diapers: { title: "Thay tã", kicker: "SINH HOẠT", icon: "◇", loader: () => import("./modules/diapers.js") },
-  symptoms: { title: "Triệu chứng", kicker: "SỨC KHỎE", icon: "!", loader: () => import("./modules/symptoms.js") },
-  medications: { title: "Thuốc & vitamin", kicker: "SỨC KHỎE", icon: "✦", loader: () => import("./modules/medications.js") },
-  allergies: { title: "Dị ứng", kicker: "SỨC KHỎE", icon: "⚑", loader: () => import("./modules/allergies.js") },
-  milestones: { title: "Mốc phát triển", kicker: "PHÁT TRIỂN", icon: "★", loader: () => import("./modules/milestones.js") },
-  teething: { title: "Mọc răng", kicker: "PHÁT TRIỂN", icon: "♢", loader: () => import("./modules/teething.js") },
-  reminders: { title: "Nhắc việc", kicker: "LỊCH", icon: "◷", loader: () => import("./modules/reminders.js") },
-  reports: { title: "Báo cáo & xuất dữ liệu", kicker: "BÁO CÁO", icon: "▤", loader: () => import("./modules/reports.js") },
-  users: { title: "Người dùng", kicker: "QUẢN TRỊ", icon: "♧", adminOnly: true, loader: () => import("./modules/allowed-users.js") },
-  settings: { title: "Cài đặt", kicker: "ỨNG DỤNG", icon: "⚙", loader: () => import("./modules/settings.js") }
+  dashboard: { title: "Dashboard", kicker: "TỔNG QUAN", icon: "dashboard", loader: () => import("./modules/dashboard.js") },
+  babies: { title: "Hồ sơ bé", kicker: "HỒ SƠ", icon: "child_care", loader: () => import("./modules/babies.js") },
+  growth: { title: "Tăng trưởng", kicker: "PHÁT TRIỂN", icon: "monitoring", loader: () => import("./modules/growth.js") },
+  vaccinations: { title: "Tiêm phòng", kicker: "SỨC KHỎE", icon: "vaccines", loader: () => import("./modules/vaccinations.js") },
+  "medical-visits": { title: "Khám bệnh", kicker: "SỨC KHỎE", icon: "stethoscope", loader: () => import("./modules/medical-visits.js") },
+  feeding: { title: "Ăn uống", kicker: "SINH HOẠT", icon: "restaurant", loader: () => import("./modules/feeding.js") },
+  sleep: { title: "Giấc ngủ", kicker: "SINH HOẠT", icon: "bedtime", loader: () => import("./modules/sleep.js") },
+  diapers: { title: "Thay tã", kicker: "SINH HOẠT", icon: "baby_changing_station", loader: () => import("./modules/diapers.js") },
+  symptoms: { title: "Triệu chứng", kicker: "SỨC KHỎE", icon: "thermometer", loader: () => import("./modules/symptoms.js") },
+  medications: { title: "Thuốc & vitamin", kicker: "SỨC KHỎE", icon: "medication", loader: () => import("./modules/medications.js") },
+  allergies: { title: "Dị ứng", kicker: "SỨC KHỎE", icon: "allergies", loader: () => import("./modules/allergies.js") },
+  milestones: { title: "Mốc phát triển", kicker: "PHÁT TRIỂN", icon: "emoji_events", loader: () => import("./modules/milestones.js") },
+  teething: { title: "Mọc răng", kicker: "PHÁT TRIỂN", icon: "dentistry", loader: () => import("./modules/teething.js") },
+  reminders: { title: "Nhắc việc", kicker: "LỊCH", icon: "notifications", loader: () => import("./modules/reminders.js") },
+  reports: { title: "Báo cáo & xuất dữ liệu", kicker: "BÁO CÁO", icon: "lab_profile", loader: () => import("./modules/reports.js") },
+  users: { title: "Người dùng", kicker: "QUẢN TRỊ", icon: "group", adminOnly: true, loader: () => import("./modules/allowed-users.js") },
+  settings: { title: "Cài đặt", kicker: "ỨNG DỤNG", icon: "settings", loader: () => import("./modules/settings.js") }
 };
 
 let cleanupCurrentView = null;
