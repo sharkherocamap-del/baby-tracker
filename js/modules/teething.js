@@ -8,6 +8,7 @@ const positions = ["U-R5","U-R4","U-R3","U-R2","U-R1","U-L1","U-L2","U-L3","U-L4
 
 const config = {
   title: "Mọc răng",
+  icon: "dentistry",
   singular: "Bản ghi mọc răng",
   collection: "teethingRecords",
   dateField: "eruptedDate",

@@ -7,6 +7,7 @@ import { formatDate, formatDateTime, parseLocalInput, toDate, toDateInput, toDat
 import { friendlyErrorMessage, showToast } from "../toast.js";
 import { clearElement, createElement, renderEmptyState, renderErrorState, renderLoading, statusBadge } from "../ui.js";
 import { trimText, validateFormFields } from "../validators.js";
+import { createIcon, setButtonContent } from "../icons.js";
 
 function displayValue(field, value, record) {
   if (typeof field.display === "function") return field.display(value, record);
@@ -84,8 +85,10 @@ function makeForm(config, record, onSaved) {
     form.append(control.wrapper);
   });
   const actions = createElement("div", { className: "form-actions full" });
-  const cancel = createElement("button", { className: "button button-ghost", text: "Hủy", attrs: { type: "button" } });
-  const submit = createElement("button", { className: "button button-primary", text: record ? "Lưu thay đổi" : "Thêm bản ghi", attrs: { type: "submit" } });
+  const cancel = createElement("button", { className: "button button-ghost", attrs: { type: "button" } });
+  setButtonContent(cancel, "close", "Hủy");
+  const submit = createElement("button", { className: "button button-primary", attrs: { type: "submit" } });
+  setButtonContent(submit, record ? "save" : "add", record ? "Lưu thay đổi" : "Thêm bản ghi");
   cancel.addEventListener("click", closeModal);
   actions.append(cancel, submit);
   form.append(actions);
@@ -139,7 +142,10 @@ function renderRecordCard(config, record, onDelete) {
   const card = createElement("article", { className: "card record-card" });
   const header = createElement("div", { className: "record-card-header" });
   const titleWrapper = createElement("div");
-  titleWrapper.append(createElement("div", { className: "record-card-title", text: typeof config.recordTitle === "function" ? config.recordTitle(record) : record[config.recordTitle] || config.singular }));
+  const title = createElement("div", { className: "record-card-title" });
+  if (config.icon) title.append(createIcon(config.icon, { size: 19 }));
+  title.append(document.createTextNode(typeof config.recordTitle === "function" ? config.recordTitle(record) : record[config.recordTitle] || config.singular));
+  titleWrapper.append(title);
   if (config.recordSubtitle) titleWrapper.append(createElement("div", { className: "muted small", text: config.recordSubtitle(record) }));
   header.append(titleWrapper);
   if (config.statusField && record[config.statusField] !== undefined && record[config.statusField] !== null) {
@@ -160,8 +166,10 @@ function renderRecordCard(config, record, onDelete) {
   card.append(fields);
 
   const actions = createElement("div", { className: "record-actions" });
-  const edit = createElement("button", { className: "button button-secondary", text: "Sửa", attrs: { type: "button" } });
-  const remove = createElement("button", { className: "button button-ghost text-danger", text: "Xóa", attrs: { type: "button" } });
+  const edit = createElement("button", { className: "button button-secondary", attrs: { type: "button" } });
+  setButtonContent(edit, "edit", "Sửa");
+  const remove = createElement("button", { className: "button button-ghost text-danger", attrs: { type: "button" } });
+  setButtonContent(remove, "delete", "Xóa");
   edit.addEventListener("click", () => openRecordForm(config, record));
   remove.addEventListener("click", () => onDelete(record));
   actions.append(edit, remove);
@@ -187,7 +195,7 @@ export async function renderRecordModule(container, config) {
   const { selectedBabyId, selectedBaby } = getState();
   clearElement(container);
   if (!selectedBabyId) {
-    renderEmptyState(container, { icon: "👶", title: "Chưa có hồ sơ em bé", message: "Hãy tạo hồ sơ em bé trước khi thêm dữ liệu theo dõi.", actionLabel: "Mở Hồ sơ bé", onAction: () => { window.location.hash = "#/babies"; } });
+    renderEmptyState(container, { icon: "child_care", title: "Chưa có hồ sơ em bé", message: "Hãy tạo hồ sơ em bé trước khi thêm dữ liệu theo dõi.", actionLabel: "Mở Hồ sơ bé", onAction: () => { window.location.hash = "#/babies"; } });
     return () => {};
   }
 
@@ -195,8 +203,10 @@ export async function renderRecordModule(container, config) {
   const intro = createElement("div");
   intro.append(createElement("h2", { text: config.title }), createElement("p", { className: "muted", text: config.description || `Theo dõi ${config.title.toLowerCase()} của ${selectedBaby.nickname || selectedBaby.name}.` }));
   const actions = createElement("div", { className: "view-actions" });
-  const exportButton = createElement("button", { className: "button button-ghost", text: "Xuất CSV", attrs: { type: "button" } });
-  const addButton = createElement("button", { className: "button button-primary", text: `+ Thêm ${config.singular.toLowerCase()}`, attrs: { type: "button" } });
+  const exportButton = createElement("button", { className: "button button-ghost", attrs: { type: "button" } });
+  setButtonContent(exportButton, "download", "Xuất CSV");
+  const addButton = createElement("button", { className: "button button-primary", attrs: { type: "button" } });
+  setButtonContent(addButton, "add", `Thêm ${config.singular.toLowerCase()}`);
   actions.append(exportButton, addButton);
   header.append(intro, actions);
   container.append(header);
@@ -232,7 +242,7 @@ export async function renderRecordModule(container, config) {
     const records = allRecords.filter((record) => recordMatches(config, record, search.value.trim(), start.value, end.value, extraFilter?.value || ""));
     clearElement(list);
     if (!records.length) {
-      renderEmptyState(list, { icon: config.emptyIcon || "📝", title: search.value || start.value || end.value ? "Không tìm thấy kết quả" : `Chưa có ${config.title.toLowerCase()}`, message: "Hãy thêm bản ghi đầu tiên hoặc thay đổi bộ lọc.", actionLabel: `Thêm ${config.singular.toLowerCase()}`, onAction: () => openRecordForm(config) });
+      renderEmptyState(list, { icon: config.emptyIcon || "description", title: search.value || start.value || end.value ? "Không tìm thấy kết quả" : `Chưa có ${config.title.toLowerCase()}`, message: "Hãy thêm bản ghi đầu tiên hoặc thay đổi bộ lọc.", actionLabel: `Thêm ${config.singular.toLowerCase()}`, onAction: () => openRecordForm(config) });
     } else {
       records.forEach((record) => list.append(renderRecordCard(config, record, async (target) => {
         const confirmed = await confirmDialog({ title: `Xóa ${config.singular.toLowerCase()}?`, message: "Bản ghi sẽ bị xóa khỏi Firestore và không thể hoàn tác.", confirmLabel: "Xóa", danger: true });

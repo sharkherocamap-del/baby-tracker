@@ -29,11 +29,12 @@ function chartSignature(records) {
 
 const config = {
   title: "Theo dõi tăng trưởng",
+  icon: "monitoring",
   singular: "Bản ghi tăng trưởng",
   collection: "growthRecords",
   dateField: "measuredAt",
   orderByField: "measuredAt",
-  emptyIcon: "📈",
+  emptyIcon: "monitoring",
   description: "Ghi cân nặng, chiều cao và vòng đầu; không tự đánh giá tình trạng phát triển.",
   medicalNote: "Biểu đồ chỉ thể hiện dữ liệu gia đình đã nhập. Ứng dụng không kết luận thiếu cân, thừa cân hoặc chậm phát triển.",
   recordTitle: (record) => `Đo ngày ${formatDate(record.measuredAt)}`,

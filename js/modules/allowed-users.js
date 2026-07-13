@@ -5,6 +5,7 @@ import { confirmDialog, closeModal, openModal } from "../modal.js";
 import { friendlyErrorMessage, showToast } from "../toast.js";
 import { clearElement, createElement, renderEmptyState, renderErrorState, renderLoading, statusBadge } from "../ui.js";
 import { isValidEmail, normalizeEmail, trimText, validateRole } from "../validators.js";
+import { setButtonContent } from "../icons.js";
 
 function userForm(record = null) {
   const state = getState();
@@ -39,8 +40,10 @@ function userForm(record = null) {
 
   form.append(emailField, nameField, roleField, activeField);
   const actions = createElement("div", { className: "form-actions full" });
-  const cancel = createElement("button", { className: "button button-ghost", text: "Hủy", attrs: { type: "button" } });
-  const submit = createElement("button", { className: "button button-primary", text: record ? "Lưu" : "Thêm người dùng", attrs: { type: "submit" } });
+  const cancel = createElement("button", { className: "button button-ghost", attrs: { type: "button" } });
+  setButtonContent(cancel, "close", "Hủy");
+  const submit = createElement("button", { className: "button button-primary", attrs: { type: "submit" } });
+  setButtonContent(submit, record ? "save" : "person_add", record ? "Lưu" : "Thêm người dùng");
   cancel.addEventListener("click", closeModal); actions.append(cancel, submit); form.append(actions);
 
   form.addEventListener("submit", async (event) => {
@@ -78,7 +81,8 @@ export function render(container) {
   }
   const header = createElement("div", { className: "view-header" });
   const intro = createElement("div"); intro.append(createElement("h2", { text: "Người dùng được phép" }), createElement("p", { className: "muted", text: "Document ID phải là email viết thường. Không có public signup." }));
-  const add = createElement("button", { className: "button button-primary", text: "+ Thêm người dùng", attrs: { type: "button" } });
+  const add = createElement("button", { className: "button button-primary", attrs: { type: "button" } });
+  setButtonContent(add, "person_add", "Thêm người dùng");
   add.addEventListener("click", () => openModal({ title: "Thêm người dùng", content: userForm() }));
   header.append(intro, add); container.append(header);
   container.append(createElement("p", { className: "medical-note mb-2", text: "Admin đầu tiên phải được tạo thủ công trong Firebase Console. Frontend chỉ hỗ trợ quản lý sau khi admin đó đăng nhập thành công." }));
@@ -92,7 +96,7 @@ export function render(container) {
     const term = search.value.trim().toLowerCase();
     const filtered = records.filter((item) => `${item.email} ${item.displayName}`.toLowerCase().includes(term));
     clearElement(list);
-    if (!filtered.length) { renderEmptyState(list, { icon: "👥", title: "Không có người dùng phù hợp", message: "Thêm người dùng mới hoặc thay đổi từ khóa." }); return; }
+    if (!filtered.length) { renderEmptyState(list, { icon: "group", title: "Không có người dùng phù hợp", message: "Thêm người dùng mới hoặc thay đổi từ khóa." }); return; }
     filtered.forEach((item) => {
       const card = createElement("article", { className: "card record-card" });
       const top = createElement("div", { className: "record-card-header" });
@@ -104,8 +108,10 @@ export function render(container) {
       [["Ngày tạo", formatDateTime(item.createdAt)], ["Người tạo", item.createdByEmail || "—"], ["Cập nhật", formatDateTime(item.updatedAt)]].forEach(([label,value]) => { const field=createElement("div",{className:"record-field"}); field.append(createElement("span",{text:label}),createElement("span",{text:value})); fields.append(field); });
       card.append(fields);
       const actions = createElement("div", { className: "record-actions" });
-      const edit = createElement("button", { className: "button button-secondary", text: "Sửa", attrs: { type: "button" } });
-      const remove = createElement("button", { className: "button button-ghost text-danger", text: "Xóa", attrs: { type: "button" } });
+      const edit = createElement("button", { className: "button button-secondary", attrs: { type: "button" } });
+      setButtonContent(edit, "edit", "Sửa");
+      const remove = createElement("button", { className: "button button-ghost text-danger", attrs: { type: "button" } });
+      setButtonContent(remove, "delete", "Xóa");
       remove.disabled = item.id === selfEmail; remove.title = remove.disabled ? "Không thể tự xóa tài khoản admin đang đăng nhập" : "";
       edit.addEventListener("click", () => openModal({ title: "Sửa người dùng", content: userForm(item) }));
       remove.addEventListener("click", async () => {

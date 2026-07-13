@@ -2,6 +2,7 @@ import { renderRecordModule } from "./module-factory.js";
 
 const config = {
   title: "Dị ứng",
+  icon: "allergies",
   singular: "Dị ứng",
   collection: "allergies",
   dateField: "discoveredAt",

@@ -7,6 +7,7 @@ import { closeModal, openModal } from "../modal.js";
 import { createElement } from "../ui.js";
 import { friendlyErrorMessage, showToast } from "../toast.js";
 import { isValidUrl, trimText } from "../validators.js";
+import { setButtonContent } from "../icons.js";
 
 const MAX_IMPORT_ROWS = 400;
 const MAX_CSV_SIZE_BYTES = 2 * 1024 * 1024;
@@ -225,8 +226,10 @@ function openImportPreview(rows, fileName) {
   content.append(createPreviewTable(rows));
 
   const actions = createElement("div", { className: "form-actions" });
-  const cancel = createElement("button", { className: "button button-ghost", text: "Hủy", attrs: { type: "button" } });
-  const submit = createElement("button", { className: "button button-primary", text: `Nhập ${validRows.length} mũi tiêm`, attrs: { type: "button" } });
+  const cancel = createElement("button", { className: "button button-ghost", attrs: { type: "button" } });
+  setButtonContent(cancel, "close", "Hủy");
+  const submit = createElement("button", { className: "button button-primary", attrs: { type: "button" } });
+  setButtonContent(submit, "upload_file", `Nhập ${validRows.length} mũi tiêm`);
   submit.disabled = validRows.length === 0;
   cancel.addEventListener("click", closeModal);
   submit.addEventListener("click", async () => {
@@ -234,7 +237,7 @@ function openImportPreview(rows, fileName) {
     if (!selectedBabyId) return;
     submit.disabled = true;
     cancel.disabled = true;
-    submit.textContent = "Đang nhập...";
+    setButtonContent(submit, "progress_activity", "Đang nhập...");
     try {
       const path = getBabySubcollection(selectedBabyId, "vaccinations");
       await runWriteBatch(validRows.map((row) => ({ type: "create", path, data: row.payload })));
@@ -245,7 +248,7 @@ function openImportPreview(rows, fileName) {
       showToast(friendlyErrorMessage(error, "Không thể nhập dữ liệu CSV."), "error");
       submit.disabled = false;
       cancel.disabled = false;
-      submit.textContent = `Nhập ${validRows.length} mũi tiêm`;
+      setButtonContent(submit, "upload_file", `Nhập ${validRows.length} mũi tiêm`);
     }
   });
   actions.append(cancel, submit);
@@ -264,9 +267,9 @@ async function handleCsvFile(file, triggerButton) {
     return;
   }
 
-  const originalLabel = triggerButton.textContent;
+  const originalLabel = "Nhập CSV";
   triggerButton.disabled = true;
-  triggerButton.textContent = "Đang đọc CSV...";
+  setButtonContent(triggerButton, "progress_activity", "Đang đọc CSV...");
   try {
     const rows = parseVaccinationCsv(await file.text());
     const { selectedBabyId } = getState();
@@ -283,7 +286,7 @@ async function handleCsvFile(file, triggerButton) {
     else showToast(friendlyErrorMessage(error, "Không thể đọc file CSV."), "error");
   } finally {
     triggerButton.disabled = false;
-    triggerButton.textContent = originalLabel;
+    setButtonContent(triggerButton, "upload_file", originalLabel);
   }
 }
 
@@ -296,8 +299,10 @@ function renderCsvImport(container) {
   );
   const actions = createElement("div", { className: "flex flex-wrap gap-1" });
   const fileInput = createElement("input", { className: "hidden", attrs: { type: "file", accept: ".csv,text/csv", "aria-label": "Chọn file CSV tiêm phòng" } });
-  const importButton = createElement("button", { className: "button button-secondary", text: "Nhập CSV", attrs: { type: "button" } });
-  const templateButton = createElement("button", { className: "button button-ghost", text: "Tải CSV mẫu", attrs: { type: "button" } });
+  const importButton = createElement("button", { className: "button button-secondary", attrs: { type: "button" } });
+  setButtonContent(importButton, "upload_file", "Nhập CSV");
+  const templateButton = createElement("button", { className: "button button-ghost", attrs: { type: "button" } });
+  setButtonContent(templateButton, "download", "Tải CSV mẫu");
   importButton.addEventListener("click", () => fileInput.click());
   templateButton.addEventListener("click", () => exportCsv([], vaccinationCsvColumns, "baby-tracker-vaccinations-template"));
   fileInput.addEventListener("change", async () => {
@@ -312,6 +317,7 @@ function renderCsvImport(container) {
 
 const config = {
   title: "Tiêm phòng",
+  icon: "vaccines",
   singular: "Mũi tiêm",
   collection: "vaccinations",
   dateField: "scheduledDate",

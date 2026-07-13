@@ -3,6 +3,7 @@ import { formatDateTime } from "../date-utils.js";
 
 const config = {
   title: "Thay tã & tiêu hóa",
+  icon: "baby_changing_station",
   singular: "Lần thay tã",
   collection: "diaperRecords",
   dateField: "changedAt",

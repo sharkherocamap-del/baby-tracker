@@ -4,6 +4,7 @@ import { showToast } from "../toast.js";
 
 const config = {
   title: "Nhiệt độ & triệu chứng",
+  icon: "thermometer",
   singular: "Bản ghi triệu chứng",
   collection: "symptomRecords",
   dateField: "recordedAt",

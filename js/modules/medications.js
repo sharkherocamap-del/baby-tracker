@@ -4,12 +4,14 @@ import { getState } from "../app-state.js";
 import { formatDate, formatDateTime } from "../date-utils.js";
 import { clearElement, createElement, renderEmptyState } from "../ui.js";
 import { friendlyErrorMessage, showToast } from "../toast.js";
+import { createIcon, setButtonContent } from "../icons.js";
 
 let unsubscribeLogs = null;
 let logsContainer = null;
 
 const config = {
   title: "Thuốc & vitamin",
+  icon: "medication",
   singular: "Thuốc hoặc vitamin",
   collection: "medications",
   dateField: "startDate",
@@ -46,16 +48,17 @@ const config = {
     unsubscribeLogs?.();
     unsubscribeLogs = subscribeToCollection(getBabySubcollection(selectedBabyId, "medicationLogs"), { orderByField: "takenAt", orderDirection: "desc", limit: 20 }, (logs) => {
       clearElement(logsContainer);
-      if (!logs.length) { renderEmptyState(logsContainer, { icon: "💊", title: "Chưa có lịch sử dùng thuốc", message: "Bấm “Ghi đã dùng” ở một thuốc hoặc vitamin." }); return; }
+      if (!logs.length) { renderEmptyState(logsContainer, { icon: "medication", title: "Chưa có lịch sử dùng thuốc", message: "Bấm “Ghi đã dùng” ở một thuốc hoặc vitamin." }); return; }
       logs.forEach((log) => {
         const item = createElement("div", { className: "activity-item" });
-        item.append(createElement("span", { text: "✓" }), createElement("div", { text: `${formatDateTime(log.takenAt)} · ${log.notes || "Đã dùng"}` }));
+        const iconBox=createElement("span",{className:"activity-icon"}); iconBox.append(createIcon("check",{size:20,filled:true})); item.append(iconBox, createElement("div", { text: `${formatDateTime(log.takenAt)} · ${log.notes || "Đã dùng"}` }));
         logsContainer.append(item);
       });
     }, (error) => { console.error(error); logsContainer.textContent = "Không thể tải lịch sử dùng thuốc."; });
   },
   customCardActions(record, actions) {
-    const taken = createElement("button", { className: "button button-primary", text: "Ghi đã dùng", attrs: { type: "button" } });
+    const taken = createElement("button", { className: "button button-primary", attrs: { type: "button" } });
+    setButtonContent(taken, "check_circle", "Ghi đã dùng");
     taken.addEventListener("click", async () => {
       taken.disabled = true;
       try {

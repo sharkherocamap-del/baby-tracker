@@ -3,6 +3,7 @@ import { formatDateTime } from "../date-utils.js";
 
 const config = {
   title: "Lịch & nhắc việc",
+  icon: "notifications",
   singular: "Nhắc việc",
   collection: "reminders",
   dateField: "scheduledAt",

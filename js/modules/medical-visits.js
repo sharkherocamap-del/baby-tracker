@@ -3,6 +3,7 @@ import { formatDate } from "../date-utils.js";
 
 const config = {
   title: "Hồ sơ khám bệnh",
+  icon: "stethoscope",
   singular: "Lần khám",
   collection: "medicalVisits",
   dateField: "visitDate",

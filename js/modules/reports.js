@@ -4,6 +4,7 @@ import { exportCsv, exportJson } from "../export-utils.js";
 import { formatDate, formatDateTime } from "../date-utils.js";
 import { friendlyErrorMessage, showToast } from "../toast.js";
 import { clearElement, createElement, renderEmptyState, renderLoading } from "../ui.js";
+import { createIcon, setButtonContent } from "../icons.js";
 
 const modules = [
   ["growthRecords","Tăng trưởng","measuredAt"],["vaccinations","Tiêm phòng","scheduledDate"],["medicalVisits","Khám bệnh","visitDate"],
@@ -36,23 +37,25 @@ function summarySection(title, lines) {
   const section = createElement("section", { className: "card mb-2" }); section.append(createElement("h3", { text:title }));
   const list = createElement("div", { className:"activity-list mt-1" });
   if (!lines.length) list.append(createElement("p",{className:"muted",text:"Chưa có dữ liệu."}));
-  lines.forEach((line) => { const row=createElement("div",{className:"activity-item"}); row.append(createElement("span",{text:"•"}),createElement("div",{text:line})); list.append(row); });
+  lines.forEach((line) => { const row=createElement("div",{className:"activity-item"}); const iconBox=createElement("span",{className:"activity-icon"}); iconBox.append(createIcon("chevron_right",{size:20})); row.append(iconBox,createElement("div",{text:line})); list.append(row); });
   section.append(list); return section;
 }
 
 export async function render(container) {
   clearElement(container);
   const { selectedBabyId, selectedBaby } = getState();
-  if (!selectedBabyId) { renderEmptyState(container,{icon:"▤",title:"Chưa chọn em bé",message:"Hãy tạo hoặc chọn hồ sơ em bé trước khi xuất báo cáo."}); return () => {}; }
+  if (!selectedBabyId) { renderEmptyState(container,{icon:"lab_profile",title:"Chưa chọn em bé",message:"Hãy tạo hoặc chọn hồ sơ em bé trước khi xuất báo cáo."}); return () => {}; }
   const header=createElement("div",{className:"view-header"}); const intro=createElement("div"); intro.append(createElement("h2",{text:"Báo cáo & xuất dữ liệu"}),createElement("p",{className:"muted",text:"Tải JSON backup, CSV theo module hoặc in bản tóm tắt đi khám."})); header.append(intro); container.append(header);
   const loading=createElement("div"); container.append(loading); renderLoading(loading);
   try {
     const data=await loadAll(selectedBabyId); loading.remove();
     const actions=createElement("section",{className:"card mb-2"}); actions.append(createElement("h3",{text:"Xuất dữ liệu"}));
     const buttons=createElement("div",{className:"flex flex-wrap gap-1 mt-1"});
-    const jsonButton=createElement("button",{className:"button button-primary",text:"Tải backup JSON",attrs:{type:"button"}});
+    const jsonButton=createElement("button",{className:"button button-primary",attrs:{type:"button"}});
+    setButtonContent(jsonButton,"download","Tải backup JSON");
     jsonButton.addEventListener("click",()=>exportJson({exportedAt:new Date(),baby:selectedBaby,data},"baby-tracker-backup"));
-    const printButton=createElement("button",{className:"button button-secondary",text:"In tóm tắt đi khám",attrs:{type:"button"}});
+    const printButton=createElement("button",{className:"button button-secondary",attrs:{type:"button"}});
+    setButtonContent(printButton,"print","In tóm tắt đi khám");
     printButton.addEventListener("click",()=>{
       document.body.classList.add("print-medical-summary");
       const cleanup=()=>document.body.classList.remove("print-medical-summary");
@@ -62,7 +65,7 @@ export async function render(container) {
     });
     buttons.append(jsonButton,printButton); actions.append(buttons);
     const csvGrid=createElement("div",{className:"quick-actions mt-2"});
-    modules.forEach(([name,label])=>{ const records=data[name]; const button=createElement("button",{className:"quick-action",attrs:{type:"button"}}); button.append(createElement("span",{text:"CSV"}),createElement("strong",{text:`${label} (${records.length})`})); button.disabled=!records.length; button.addEventListener("click",()=>exportCsv(records,genericColumns(records),`baby-tracker-${name}`)); csvGrid.append(button); });
+    modules.forEach(([name,label])=>{ const records=data[name]; const button=createElement("button",{className:"quick-action",attrs:{type:"button"}}); button.append(createIcon("table_view",{size:27,className:"quick-action-icon",filled:true}),createElement("strong",{text:`${label} (${records.length})`})); button.disabled=!records.length; button.addEventListener("click",()=>exportCsv(records,genericColumns(records),`baby-tracker-${name}`)); csvGrid.append(button); });
     actions.append(csvGrid); container.append(actions);
 
     const report=createElement("section",{attrs:{id:"medical-summary"}});

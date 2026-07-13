@@ -5,6 +5,7 @@ import { confirmDialog, closeModal, openModal } from "../modal.js";
 import { friendlyErrorMessage, showToast } from "../toast.js";
 import { clearElement, createElement, renderEmptyState, safeImage, statusBadge } from "../ui.js";
 import { isPositiveNumber, isValidUrl, trimText } from "../validators.js";
+import { setButtonContent } from "../icons.js";
 
 const subcollections = ["growthRecords", "vaccinations", "medicalVisits", "feedingRecords", "sleepRecords", "diaperRecords", "symptomRecords", "medications", "medicationLogs", "allergies", "milestones", "teethingRecords", "reminders"];
 
@@ -53,8 +54,10 @@ function createBabyForm(record = null) {
     form.append(wrapper);
   });
   const actions = createElement("div", { className: "form-actions full" });
-  const cancel = createElement("button", { className: "button button-ghost", text: "Hủy", attrs: { type: "button" } });
-  const submit = createElement("button", { className: "button button-primary", text: record ? "Lưu thay đổi" : "Tạo hồ sơ", attrs: { type: "submit" } });
+  const cancel = createElement("button", { className: "button button-ghost", attrs: { type: "button" } });
+  setButtonContent(cancel, "close", "Hủy");
+  const submit = createElement("button", { className: "button button-primary", attrs: { type: "submit" } });
+  setButtonContent(submit, record ? "save" : "person_add", record ? "Lưu thay đổi" : "Tạo hồ sơ");
   cancel.addEventListener("click", closeModal);
   actions.append(cancel, submit); form.append(actions);
 
@@ -112,11 +115,12 @@ function renderCards(container) {
   clearElement(container);
   const header = createElement("div", { className: "view-header" });
   const intro = createElement("div"); intro.append(createElement("h2", { text: "Hồ sơ em bé" }), createElement("p", { className: "muted", text: "Quản lý một hoặc nhiều em bé trong workspace gia đình." }));
-  const add = createElement("button", { className: "button button-primary", text: "+ Thêm em bé", attrs: { type: "button" } });
+  const add = createElement("button", { className: "button button-primary", attrs: { type: "button" } });
+  setButtonContent(add, "person_add", "Thêm em bé");
   add.addEventListener("click", () => openModal({ title: "Thêm hồ sơ em bé", content: createBabyForm() }));
   header.append(intro, add); container.append(header);
   const list = createElement("div", { className: "grid dashboard-grid" }); container.append(list);
-  if (!state.babies.length) { renderEmptyState(list, { icon: "👶", title: "Chưa có hồ sơ em bé", message: "Tạo hồ sơ đầu tiên để bắt đầu theo dõi.", actionLabel: "Thêm em bé", onAction: () => openModal({ title: "Thêm hồ sơ em bé", content: createBabyForm() }) }); return; }
+  if (!state.babies.length) { renderEmptyState(list, { icon: "child_care", title: "Chưa có hồ sơ em bé", message: "Tạo hồ sơ đầu tiên để bắt đầu theo dõi.", actionLabel: "Thêm em bé", onAction: () => openModal({ title: "Thêm hồ sơ em bé", content: createBabyForm() }) }); return; }
   state.babies.forEach((baby) => {
     const card = createElement("article", { className: "card record-card" });
     const top = createElement("div", { className: "flex items-center gap-1" });
@@ -131,9 +135,12 @@ function renderCards(container) {
     });
     card.append(details);
     const actions = createElement("div", { className: "record-actions" });
-    const select = createElement("button", { className: "button button-secondary", text: "Chọn", attrs: { type: "button" } });
-    const edit = createElement("button", { className: "button button-ghost", text: "Sửa", attrs: { type: "button" } });
-    const remove = createElement("button", { className: "button button-ghost text-danger", text: "Xóa", attrs: { type: "button" } });
+    const select = createElement("button", { className: "button button-secondary", attrs: { type: "button" } });
+    setButtonContent(select, "check_circle", "Chọn");
+    const edit = createElement("button", { className: "button button-ghost", attrs: { type: "button" } });
+    setButtonContent(edit, "edit", "Sửa");
+    const remove = createElement("button", { className: "button button-ghost text-danger", attrs: { type: "button" } });
+    setButtonContent(remove, "delete", "Xóa");
     select.disabled = baby.id === state.selectedBabyId;
     select.addEventListener("click", () => { setSelectedBaby(baby.id); const selector = document.getElementById("baby-selector"); if (selector) selector.value = baby.id; showToast(`Đã chọn ${baby.nickname || baby.name}.`, "success"); });
     edit.addEventListener("click", () => openModal({ title: "Sửa hồ sơ em bé", content: createBabyForm(baby) }));

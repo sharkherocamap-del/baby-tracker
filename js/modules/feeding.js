@@ -4,6 +4,7 @@ import { getState } from "../app-state.js";
 import { formatDateTime, formatDuration } from "../date-utils.js";
 import { createElement } from "../ui.js";
 import { friendlyErrorMessage, showToast } from "../toast.js";
+import { setButtonContent } from "../icons.js";
 
 let timerStart = null;
 let timerInterval = null;
@@ -22,6 +23,7 @@ function updateTimer() {
 
 const config = {
   title: "Ăn uống",
+  icon: "restaurant",
   singular: "Cữ ăn",
   collection: "feedingRecords",
   dateField: "startedAt",
@@ -52,8 +54,10 @@ const config = {
     timerValue = createElement("div", { className: "timer-value", text: "0 phút" });
     info.append(timerValue);
     const actions = createElement("div", { className: "flex gap-1 flex-wrap" });
-    const start = createElement("button", { className: "button button-secondary", text: "Bắt đầu", attrs: { type: "button" } });
-    const stop = createElement("button", { className: "button button-primary", text: "Kết thúc & lưu", attrs: { type: "button" } });
+    const start = createElement("button", { className: "button button-secondary", attrs: { type: "button" } });
+    setButtonContent(start, "play_arrow", "Bắt đầu");
+    const stop = createElement("button", { className: "button button-primary", attrs: { type: "button" } });
+    setButtonContent(stop, "stop_circle", "Kết thúc & lưu");
     stop.disabled = true;
     start.addEventListener("click", () => {
       timerStart = new Date();

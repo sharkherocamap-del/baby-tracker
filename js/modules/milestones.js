@@ -4,6 +4,7 @@ import { getState } from "../app-state.js";
 
 const config = {
   title: "Mốc phát triển",
+  icon: "emoji_events",
   singular: "Mốc phát triển",
   collection: "milestones",
   dateField: "achievedDate",
