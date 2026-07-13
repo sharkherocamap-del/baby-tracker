@@ -79,3 +79,36 @@
 .table-scroll th { position: sticky; top: 0; z-index: 1; background: var(--color-surface-alt); white-space: nowrap; }
 .table-scroll tr:last-child td { border-bottom: 0; }
 .table-scroll .row-warning td { background: color-mix(in srgb, var(--color-warning) 8%, var(--color-surface)); }
+
+/* Icon system */
+.material-symbols-rounded {
+  font-family: "Material Symbols Rounded";
+  font-weight: normal;
+  font-style: normal;
+  font-size: var(--icon-size, 22px);
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "liga";
+  font-variation-settings: "FILL" var(--icon-fill, 0), "wght" 400, "GRAD" 0, "opsz" 24;
+}
+.app-icon { flex: 0 0 auto; vertical-align: middle; }
+.icon-label { display: inline-flex; align-items: center; gap: .45rem; }
+.brand-symbol { --icon-size: 34px; --icon-fill: 1; }
+.brand-mark-small .brand-symbol { --icon-size: 25px; }
+.button .app-icon, .button > .material-symbols-rounded { --icon-size: 19px; }
+.icon-button > .material-symbols-rounded { --icon-size: 22px; }
+.nav-icon { color: currentColor; }
+.stat-icon .app-icon { --icon-size: 22px; --icon-fill: 1; }
+.quick-action .quick-action-icon { --icon-size: 27px; color: var(--color-primary); }
+.activity-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px; color: var(--color-primary); background: var(--color-primary-soft); }
+.state-illustration { width: 64px; height: 64px; display: grid; place-items: center; border-radius: 20px; color: var(--color-primary); background: var(--color-primary-soft); font-size: initial; }
+.state-illustration .app-icon, .state-illustration .material-symbols-rounded { --icon-size: 38px; }
+.dropdown-menu button { display: flex; align-items: center; gap: .55rem; }
+.modal-close { display: grid; place-items: center; }

@@ -23,4 +23,4 @@
 .bottom-nav { position: fixed; z-index: 40; inset-inline: .65rem; bottom: max(.65rem, env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(5, 1fr); gap: .25rem; padding: .4rem; border: 1px solid var(--color-border); border-radius: 20px; background: color-mix(in srgb, var(--color-surface) 94%, transparent); box-shadow: var(--shadow-md); backdrop-filter: blur(14px); }
 .bottom-nav button { min-width: 0; display: grid; justify-items: center; gap: .15rem; padding: .45rem .15rem; border: 0; border-radius: 14px; color: var(--color-muted); background: transparent; font-size: .68rem; }
 .bottom-nav button.active { color: var(--color-primary); background: var(--color-primary-soft); }
-.bottom-nav .nav-icon { font-size: 1.1rem; }
+.bottom-nav .nav-icon { --icon-size: 23px; }
