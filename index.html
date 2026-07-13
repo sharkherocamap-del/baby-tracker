@@ -9,7 +9,7 @@
   <link rel="icon" href="./assets/images/baby-placeholder.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400,0,0&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./css/variables.css">
   <link rel="stylesheet" href="./css/reset.css">
   <link rel="stylesheet" href="./css/base.css">
@@ -24,14 +24,14 @@
   <a class="skip-link" href="#main-content">Bỏ qua đến nội dung chính</a>
 
   <section id="boot-screen" class="center-screen" aria-live="polite">
-    <div class="brand-mark" aria-hidden="true">BT</div>
+    <div class="brand-mark" aria-hidden="true"><span class="material-symbols-rounded brand-symbol">child_care</span></div>
     <h1>Baby Tracker</h1>
     <p id="boot-message">Đang khởi tạo ứng dụng...</p>
     <div class="spinner" aria-hidden="true"></div>
   </section>
 
   <section id="config-error-screen" class="center-screen hidden" aria-labelledby="config-error-title">
-    <div class="state-illustration" aria-hidden="true">⚙️</div>
+    <div class="state-illustration" aria-hidden="true"><span class="material-symbols-rounded">settings_alert</span></div>
     <h1 id="config-error-title">Chưa cấu hình Firebase</h1>
     <p>Hãy mở <code>js/firebase-config.js</code>, thay các giá trị bắt đầu bằng <code>YOUR_</code>, sau đó tải lại trang.</p>
     <details>
@@ -42,12 +42,12 @@
 
   <section id="login-screen" class="login-screen hidden" aria-labelledby="login-title">
     <div class="login-card">
-      <div class="brand-mark" aria-hidden="true">BT</div>
+      <div class="brand-mark" aria-hidden="true"><span class="material-symbols-rounded brand-symbol">child_care</span></div>
       <p class="eyebrow">SỨC KHỎE & PHÁT TRIỂN</p>
       <h1 id="login-title">Baby Tracker</h1>
       <p>Ghi chép tập trung các hoạt động quan trọng của em bé cho gia đình.</p>
       <button id="google-sign-in-button" class="button button-primary button-large" type="button">
-        <span aria-hidden="true">G</span> Đăng nhập bằng Google
+        <span class="material-symbols-rounded" aria-hidden="true">login</span> Đăng nhập bằng Google
       </button>
       <p class="muted small">Chỉ các tài khoản đã được cấp quyền mới có thể sử dụng ứng dụng.</p>
       <p class="medical-note">Thông tin trong ứng dụng chỉ dùng để ghi chép và tham khảo, không thay thế việc thăm khám hoặc tư vấn của bác sĩ.</p>
@@ -63,7 +63,7 @@
   <div id="app-shell" class="app-shell hidden">
     <aside class="sidebar" aria-label="Điều hướng chính">
       <div class="sidebar-brand">
-        <div class="brand-mark brand-mark-small" aria-hidden="true">BT</div>
+        <div class="brand-mark brand-mark-small" aria-hidden="true"><span class="material-symbols-rounded brand-symbol">child_care</span></div>
         <div><strong>Baby Tracker</strong><span>Family workspace</span></div>
       </div>
       <nav id="sidebar-navigation" class="nav-list"></nav>
@@ -81,7 +81,7 @@
         <div class="topbar-actions">
           <label class="visually-hidden" for="baby-selector">Chọn em bé</label>
           <select id="baby-selector" class="baby-selector" aria-label="Chọn em bé"></select>
-          <button id="theme-toggle" class="icon-button" type="button" aria-label="Chuyển giao diện sáng tối">◐</button>
+          <button id="theme-toggle" class="icon-button" type="button" aria-label="Chuyển giao diện sáng tối"><span class="material-symbols-rounded" aria-hidden="true">dark_mode</span></button>
           <button id="user-menu-button" class="avatar-button" type="button" aria-haspopup="menu" aria-expanded="false">
             <img id="user-avatar" alt="Ảnh tài khoản" referrerpolicy="no-referrer">
           </button>
@@ -91,7 +91,7 @@
               <span id="user-email"></span>
               <span id="user-role" class="badge"></span>
             </div>
-            <button id="sign-out-button" type="button" role="menuitem">Đăng xuất</button>
+            <button id="sign-out-button" type="button" role="menuitem"><span class="material-symbols-rounded" aria-hidden="true">logout</span><span>Đăng xuất</span></button>
           </div>
         </div>
       </header>

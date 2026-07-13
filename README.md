@@ -1,5 +1,18 @@
 # Baby Tracker
 
+
+
+## Cập nhật giao diện icon và dữ liệu demo đầy đủ
+
+Phiên bản này bổ sung bộ icon **Material Symbols Rounded** cho navigation, Dashboard, thao tác nhanh, nút CRUD, timer, import CSV, modal, toast và trang cài đặt. Icon được tải qua Google Fonts cùng với font Be Vietnam Pro; nội dung và nhãn `aria-label` vẫn được giữ để hỗ trợ accessibility.
+
+Admin mở **Cài đặt → Tạo/hoàn thiện dữ liệu demo** để tạo các hồ sơ còn thiếu:
+
+- Hồ sơ demo cơ bản `Nguyễn An Nhiên (Bông)`.
+- Hồ sơ demo đầy đủ `Trần Gia Hân (Mây)`.
+
+Hồ sơ đầy đủ có dữ liệu tại tất cả 13 nhóm Firestore: tăng trưởng, tiêm phòng, khám bệnh, ăn uống, giấc ngủ, thay tã, triệu chứng, thuốc, lịch sử dùng thuốc, dị ứng, mốc phát triển, mọc răng và nhắc việc. Mỗi hồ sơ có marker riêng trong trường `notes`, vì vậy bấm nút nhiều lần không tạo trùng hồ sơ demo. Toàn bộ nội dung y tế trong demo chỉ dùng để thử giao diện, không phải tư vấn hoặc chỉ định y khoa.
+
 Ứng dụng web tĩnh mobile-first để một nhóm thành viên gia đình được cấp quyền cùng ghi chép sức khỏe, sinh hoạt và quá trình phát triển của em bé.
 
 > **Cảnh báo y tế:** Thông tin trong ứng dụng chỉ dùng để ghi chép và tham khảo, không thay thế việc thăm khám hoặc tư vấn của bác sĩ. Ứng dụng không tự chẩn đoán, kê đơn hoặc đề xuất liều thuốc.
@@ -16,6 +29,7 @@
 - Biểu đồ tăng trưởng và giấc ngủ bằng Chart.js.
 - Quản lý allowed users dành riêng cho admin.
 - Xuất JSON backup, CSV UTF-8 BOM và in tóm tắt đi khám.
+- Nhập hàng loạt lịch tiêm phòng từ CSV với xem trước, validation và bỏ qua dữ liệu trùng.
 - Dark mode, desktop sidebar, mobile bottom navigation, modal có focus trap, toast, loading/empty/error states.
 - Không có backend riêng, Node.js, npm, build tool, Firebase Storage, Cloud Functions hoặc Admin SDK ở frontend.
 
@@ -581,6 +595,19 @@ File `.nojekyll` vô hiệu xử lý Jekyll không cần thiết cho static app 
 3. Bấm **Tải backup JSON** để tải hồ sơ và tối đa 1.000 record mỗi subcollection.
 4. Bấm từng module CSV để mở trong Excel. CSV có UTF-8 BOM và escape dấu phẩy, dấu nháy, xuống dòng.
 5. Bấm **In tóm tắt đi khám** và chọn Save as PDF nếu muốn lưu bản in.
+
+### Nhập lịch tiêm phòng từ CSV
+
+1. Mở màn hình **Tiêm phòng**.
+2. Chọn **Tải CSV mẫu** để lấy file có đúng tên và thứ tự cột.
+3. Mở file bằng Excel hoặc Google Sheets và nhập dữ liệu. Các cột bắt buộc gồm `Tên vaccine`, `Mũi số`, `Ngày dự kiến`, `Trạng thái`.
+4. Ngày giờ nên dùng định dạng `dd/mm/yyyy HH:mm`, ví dụ `13/07/2026 09:30`.
+5. Trạng thái có thể dùng tiếng Việt: `Đã lên lịch`, `Sắp đến hạn`, `Đã tiêm`, `Quá hạn`, `Đã hủy`; ứng dụng cũng chấp nhận các mã `scheduled`, `upcoming`, `completed`, `overdue`, `cancelled`.
+6. Lưu dưới dạng CSV UTF-8, quay lại ứng dụng và chọn **Nhập CSV**.
+7. Kiểm tra bảng xem trước. Dòng sai định dạng hoặc trùng `Tên vaccine + Mũi số + Ngày dự kiến` sẽ bị bỏ qua.
+8. Chọn **Nhập ... mũi tiêm** để ghi các dòng hợp lệ vào Firestore bằng batch write.
+
+Mỗi lần nhập tối đa 400 dòng và file không được lớn hơn 2 MB.
 
 Tên file có timestamp ngày, ví dụ:
 
