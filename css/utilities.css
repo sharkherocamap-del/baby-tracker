@@ -1,0 +1,11 @@
+.mt-1 { margin-top: .5rem; } .mt-2 { margin-top: 1rem; } .mb-1 { margin-bottom: .5rem; } .mb-2 { margin-bottom: 1rem; }
+.text-danger { color: var(--color-danger); } .text-success { color: var(--color-success); } .text-warning { color: var(--color-warning); }
+.full-width { width: 100%; } .nowrap { white-space: nowrap; } .break-word { overflow-wrap: anywhere; }
+.flex { display: flex; } .flex-wrap { flex-wrap: wrap; } .gap-1 { gap: .5rem; } .items-center { align-items: center; } .justify-between { justify-content: space-between; }
+@media print {
+  .sidebar, .topbar, .bottom-nav, .view-actions, .record-actions, .filter-bar, .button, .icon-button { display: none !important; }
+  body, .app-shell, .app-main, .content { background: #fff !important; color: #000 !important; }
+  .content { padding: 0; max-width: none; }
+  .print-medical-summary #view-container > *:not(#medical-summary) { display: none !important; }
+  .card { break-inside: avoid; box-shadow: none; border-color: #aaa; }
+}

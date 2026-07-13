@@ -1,0 +1,25 @@
+html { min-height: 100%; background: var(--color-bg); }
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  font-family: var(--font-family);
+  color: var(--color-text);
+  background: var(--color-bg);
+  line-height: 1.55;
+}
+button, input, select, textarea { color: var(--color-text); }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-primary) 48%, transparent);
+  outline-offset: 2px;
+}
+h1 { font-size: clamp(1.5rem, 4vw, 2.2rem); line-height: 1.2; }
+h2 { font-size: clamp(1.2rem, 3vw, 1.55rem); line-height: 1.25; }
+h3 { font-size: 1.05rem; }
+code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; background: var(--color-surface-alt); padding: .15em .4em; border-radius: 6px; }
+.skip-link { position: fixed; z-index: 9999; left: 1rem; top: -5rem; padding: .75rem 1rem; background: var(--color-surface); border-radius: var(--radius-sm); }
+.skip-link:focus { top: 1rem; }
+.small { font-size: .86rem; }
+.muted { color: var(--color-muted); }
+.eyebrow { color: var(--color-primary); font-size: .75rem; letter-spacing: .12em; font-weight: 700; }
+.visually-hidden { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; border: 0 !important; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }

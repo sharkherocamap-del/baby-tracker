@@ -1,0 +1,26 @@
+.center-screen, .login-screen {
+  min-height: 100vh; min-height: 100dvh; padding: 1.25rem;
+  display: grid; place-content: center; text-align: center;
+}
+.center-screen { gap: 1rem; justify-items: center; }
+.center-screen > p { max-width: 650px; color: var(--color-muted); }
+.login-screen { background: radial-gradient(circle at 85% 10%, var(--color-primary-soft), transparent 34%), var(--color-bg); }
+.login-card { width: min(100%, 480px); display: grid; justify-items: center; gap: 1rem; background: var(--color-surface); padding: clamp(1.4rem, 5vw, 2.7rem); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); }
+.app-shell { min-height: 100vh; min-height: 100dvh; }
+.sidebar { display: none; }
+.app-main { min-width: 0; }
+.topbar { position: sticky; top: 0; z-index: 30; min-height: var(--topbar-height); padding: .8rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; background: color-mix(in srgb, var(--color-bg) 88%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--color-border); }
+.topbar h1 { font-size: 1.25rem; }
+.topbar-actions { display: flex; align-items: center; gap: .5rem; position: relative; }
+.content { width: min(100%, var(--content-max)); margin-inline: auto; padding: 1rem 1rem 6.5rem; }
+.view-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.view-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+.grid { display: grid; gap: 1rem; }
+.dashboard-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+.two-column-grid { grid-template-columns: 1fr; }
+.record-list { display: grid; gap: .8rem; }
+.filter-bar { display: grid; gap: .75rem; padding: .9rem; margin-bottom: 1rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.bottom-nav { position: fixed; z-index: 40; inset-inline: .65rem; bottom: max(.65rem, env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(5, 1fr); gap: .25rem; padding: .4rem; border: 1px solid var(--color-border); border-radius: 20px; background: color-mix(in srgb, var(--color-surface) 94%, transparent); box-shadow: var(--shadow-md); backdrop-filter: blur(14px); }
+.bottom-nav button { min-width: 0; display: grid; justify-items: center; gap: .15rem; padding: .45rem .15rem; border: 0; border-radius: 14px; color: var(--color-muted); background: transparent; font-size: .68rem; }
+.bottom-nav button.active { color: var(--color-primary); background: var(--color-primary-soft); }
+.bottom-nav .nav-icon { font-size: 1.1rem; }

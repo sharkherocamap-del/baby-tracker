@@ -1,0 +1,17 @@
+input, select, textarea { width: 100%; min-height: 44px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); padding: .65rem .75rem; }
+textarea { min-height: 100px; resize: vertical; }
+input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--color-muted) 75%, transparent); }
+.form-grid { display: grid; gap: 1rem; }
+.form-field { display: grid; gap: .38rem; }
+.form-field label { font-size: .82rem; font-weight: 650; }
+.form-help { color: var(--color-muted); font-size: .73rem; }
+.form-error { color: var(--color-danger); font-size: .76rem; min-height: 1.1em; }
+.checkbox-field { display: flex; align-items: center; gap: .6rem; }
+.checkbox-field input { width: 20px; min-height: 20px; }
+.form-actions { position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: .6rem; padding-top: 1rem; background: var(--color-surface); }
+.baby-selector { max-width: 145px; min-height: 42px; padding: .5rem .65rem; }
+.modal-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; align-items: end; background: rgba(10, 10, 20, .56); }
+.modal-panel { width: 100%; max-height: 94vh; overflow: auto; background: var(--color-surface); border-radius: 24px 24px 0 0; box-shadow: var(--shadow-md); }
+.modal-header { position: sticky; z-index: 2; top: 0; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem; border-bottom: 1px solid var(--color-border); background: var(--color-surface); }
+.modal-body { padding: 1rem; }
+.modal-close { width: 42px; height: 42px; border: 0; border-radius: 50%; background: var(--color-surface-alt); }
