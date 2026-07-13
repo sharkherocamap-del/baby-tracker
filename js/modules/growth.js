@@ -3,8 +3,29 @@ import { formatDate } from "../date-utils.js";
 import { createElement } from "../ui.js";
 import { showToast } from "../toast.js";
 
-let charts = [];
+const charts = new Map();
 let chartCanvases = {};
+let lastChartSignature = "";
+
+function destroyCharts() {
+  charts.forEach((chart) => chart.destroy());
+  charts.clear();
+  lastChartSignature = "";
+}
+
+function recordTime(record) {
+  return record.measuredAt?.toMillis?.() || record.measuredAt?.toDate?.()?.getTime?.() || 0;
+}
+
+function chartSignature(records) {
+  return records.map((record) => [
+    record.id,
+    recordTime(record),
+    record.weightKg ?? null,
+    record.heightCm ?? null,
+    record.headCircumferenceCm ?? null
+  ].join(":")).join("|");
+}
 
 const config = {
   title: "Theo dõi tăng trưởng",
@@ -31,36 +52,76 @@ const config = {
     return payload;
   },
   renderTop(container) {
+    destroyCharts();
     const card = createElement("section", { className: "card mb-2" });
     card.append(createElement("h3", { text: "Biểu đồ tăng trưởng" }));
-    const grid = createElement("div", { className: "grid mt-2" });
+    const grid = createElement("div", { className: "grid growth-chart-grid mt-2" });
     chartCanvases = {};
     [["weightKg", "Cân nặng (kg)"], ["heightCm", "Chiều cao (cm)"], ["headCircumferenceCm", "Vòng đầu (cm)"]].forEach(([key, label]) => {
-      const wrapper = createElement("div", { className: "chart-container" });
-      wrapper.append(createElement("h3", { text: label }));
+      const panel = createElement("section", { className: "chart-panel" });
+      panel.append(createElement("h3", { text: label }));
+      const viewport = createElement("div", { className: "chart-container" });
       const canvas = createElement("canvas", { attrs: { "aria-label": label, role: "img" } });
-      wrapper.append(canvas);
+      viewport.append(canvas);
+      panel.append(viewport);
       chartCanvases[key] = { canvas, label };
-      grid.append(wrapper);
+      grid.append(panel);
     });
     card.append(grid);
     container.append(card);
   },
   afterRecordsRender(records) {
-    charts.forEach((chart) => chart.destroy());
-    charts = [];
     if (!window.Chart) return;
-    const sorted = [...records].sort((a, b) => (a.measuredAt?.toMillis?.() || 0) - (b.measuredAt?.toMillis?.() || 0));
+    const sorted = [...records].sort((a, b) => recordTime(a) - recordTime(b));
+    const signature = chartSignature(sorted);
+    if (signature === lastChartSignature) return;
+    lastChartSignature = signature;
+
     Object.entries(chartCanvases).forEach(([key, meta]) => {
       const points = sorted.filter((record) => Number.isFinite(record[key]));
-      charts.push(new window.Chart(meta.canvas, {
-        type: "line",
-        data: { labels: points.map((record) => formatDate(record.measuredAt)), datasets: [{ label: meta.label, data: points.map((record) => record[key]), tension: .25 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: false } } }
-      }));
+      const labels = points.map((record) => formatDate(record.measuredAt));
+      const values = points.map((record) => record[key]);
+      let chart = charts.get(key);
+
+      if (chart && chart.canvas !== meta.canvas) {
+        chart.destroy();
+        charts.delete(key);
+        chart = null;
+      }
+
+      if (!chart) {
+        chart = new window.Chart(meta.canvas, {
+          type: "line",
+          data: {
+            labels,
+            datasets: [{ label: meta.label, data: values, tension: 0.25, pointRadius: 3, pointHoverRadius: 5 }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            resizeDelay: 120,
+            normalized: true,
+            plugins: { legend: { display: false } },
+            interaction: { mode: "nearest", intersect: false },
+            scales: { y: { beginAtZero: false } }
+          }
+        });
+        charts.set(key, chart);
+        return;
+      }
+
+      chart.data.labels = labels;
+      chart.data.datasets[0].data = values;
+      chart.update("none");
     });
   },
-  cleanup() { charts.forEach((chart) => chart.destroy()); charts = []; }
+  cleanup() {
+    destroyCharts();
+    chartCanvases = {};
+  }
 };
 
-export function render(container) { return renderRecordModule(container, config); }
+export function render(container) {
+  return renderRecordModule(container, config);
+}
