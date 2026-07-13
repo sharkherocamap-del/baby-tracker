@@ -1,0 +1,123 @@
+import { getState } from "../app-state.js";
+import { getBabySubcollection, getCollection } from "../firestore-service.js";
+import { calculateAge, durationMinutes, formatDate, formatDateTime, formatDuration, startOfLocalDay, toDate } from "../date-utils.js";
+import { friendlyErrorMessage } from "../toast.js";
+import { clearElement, createElement, renderEmptyState, renderErrorState, renderLoading, safeImage, statusBadge } from "../ui.js";
+
+const todayStart = () => startOfLocalDay(new Date());
+const isToday = (value) => { const date = toDate(value); return date && date >= todayStart(); };
+
+function statCard(icon, label, value, detail = "") {
+  const card = createElement("article", { className: "card stat-card" });
+  card.append(createElement("div", { className: "stat-icon", text: icon }), createElement("div", { className: "stat-value", text: value }), createElement("div", { className: "stat-label", text: detail ? `${label} · ${detail}` : label }));
+  return card;
+}
+
+function quickAction(icon, label, route) {
+  const button = createElement("button", { className: "quick-action", attrs: { type: "button" } });
+  button.append(createElement("span", { text: icon, attrs: { "aria-hidden": "true" } }), createElement("strong", { text: label }));
+  button.addEventListener("click", () => { window.location.hash = `#/${route}`; });
+  return button;
+}
+
+async function fetchDashboardData(babyId) {
+  const specs = {
+    growth: ["growthRecords", "measuredAt", "desc", 10], vaccines: ["vaccinations", "scheduledDate", "asc", 100], visits: ["medicalVisits", "visitDate", "desc", 50],
+    feeding: ["feedingRecords", "startedAt", "desc", 200], sleep: ["sleepRecords", "startedAt", "desc", 100], diapers: ["diaperRecords", "changedAt", "desc", 100],
+    symptoms: ["symptomRecords", "recordedAt", "desc", 100], medications: ["medications", "startDate", "desc", 100], medicationLogs: ["medicationLogs", "takenAt", "desc", 100],
+    allergies: ["allergies", "discoveredAt", "desc", 100], reminders: ["reminders", "scheduledAt", "asc", 100]
+  };
+  const entries = await Promise.all(Object.entries(specs).map(async ([key, [name, orderByField, orderDirection, limit]]) => {
+    const records = await getCollection(getBabySubcollection(babyId, name), { orderByField, orderDirection, limit });
+    return [key, records];
+  }));
+  return Object.fromEntries(entries);
+}
+
+export async function render(container) {
+  clearElement(container);
+  const { selectedBabyId, selectedBaby } = getState();
+  if (!selectedBabyId) {
+    renderEmptyState(container, { icon: "👶", title: "Bắt đầu với hồ sơ em bé", message: "Tạo hồ sơ để Dashboard có thể tổng hợp dữ liệu.", actionLabel: "Tạo hồ sơ", onAction: () => { window.location.hash = "#/babies"; } });
+    return () => {};
+  }
+  renderLoading(container);
+  try {
+    const data = await fetchDashboardData(selectedBabyId);
+    clearElement(container);
+    const profile = createElement("section", { className: "card mb-2" });
+    const profileRow = createElement("div", { className: "flex items-center gap-1" });
+    const avatar = createElement("img", { attrs: { alt: `Ảnh ${selectedBaby.name}`, width: "84", height: "84" } });
+    avatar.style.borderRadius = "22px"; avatar.style.objectFit = "cover"; safeImage(avatar, selectedBaby.avatarUrl);
+    const text = createElement("div"); text.append(createElement("p", { className: "eyebrow", text: "ĐANG THEO DÕI" }), createElement("h2", { text: selectedBaby.nickname || selectedBaby.name }), createElement("p", { className: "muted", text: `${selectedBaby.name} · ${calculateAge(selectedBaby.birthDate)}` }));
+    if (selectedBaby.allergiesSummary) text.append(statusBadge(`Dị ứng: ${selectedBaby.allergiesSummary}`, "warning"));
+    profileRow.append(avatar, text); profile.append(profileRow); container.append(profile);
+
+    const latestWeight = data.growth.find((item) => Number.isFinite(item.weightKg));
+    const latestHeight = data.growth.find((item) => Number.isFinite(item.heightCm));
+    const latestHead = data.growth.find((item) => Number.isFinite(item.headCircumferenceCm));
+    const latestTemp = data.symptoms.find((item) => Number.isFinite(item.temperatureCelsius));
+    const now = new Date();
+    const nextVaccine = data.vaccines.find((item) => toDate(item.scheduledDate) >= now && !["completed", "cancelled"].includes(item.status));
+    const followUps = data.visits.filter((item) => item.followUpDate && toDate(item.followUpDate) >= now).sort((a,b) => toDate(a.followUpDate)-toDate(b.followUpDate));
+    const nextVisit = followUps[0];
+    const todayFeeding = data.feeding.filter((item) => isToday(item.startedAt));
+    const milkMl = todayFeeding.filter((item) => ["formula","breast_milk_bottle"].includes(item.feedingType) && item.unit === "ml").reduce((sum,item) => sum + (Number(item.amount) || 0), 0);
+    const todaySleep = data.sleep.filter((item) => isToday(item.startedAt));
+    const sleepMinutes = todaySleep.reduce((sum,item) => sum + durationMinutes(item.startedAt, item.endedAt), 0);
+    const todayDiapers = data.diapers.filter((item) => isToday(item.changedAt));
+    const wetCount = todayDiapers.filter((item) => ["wet","both"].includes(item.diaperType)).length;
+    const dirtyCount = todayDiapers.filter((item) => ["dirty","both"].includes(item.diaperType)).length;
+    const activeSymptoms = data.symptoms.filter((item) => item.active === true);
+    const activeMedications = data.medications.filter((item) => item.active === true);
+    const pendingReminders = data.reminders.filter((item) => !item.completed && toDate(item.scheduledAt) >= todayStart());
+
+    const stats = createElement("section", { className: "grid dashboard-grid mb-2" });
+    stats.append(
+      statCard("⚖", "Cân nặng gần nhất", latestWeight?.weightKg ? `${latestWeight.weightKg} kg` : "—", latestWeight ? formatDate(latestWeight.measuredAt) : "chưa có"),
+      statCard("↕", "Chiều cao gần nhất", latestHeight?.heightCm ? `${latestHeight.heightCm} cm` : "—", latestHeight ? formatDate(latestHeight.measuredAt) : "chưa có"),
+      statCard("◯", "Vòng đầu gần nhất", latestHead?.headCircumferenceCm ? `${latestHead.headCircumferenceCm} cm` : "—", latestHead ? formatDate(latestHead.measuredAt) : "chưa có"),
+      statCard("℃", "Nhiệt độ gần nhất", latestTemp ? `${latestTemp.temperatureCelsius}°C` : "—", latestTemp ? formatDateTime(latestTemp.recordedAt) : "chưa có"),
+      statCard("◒", "Sữa hôm nay", `${milkMl} ml`, `${todayFeeding.length} cữ ăn`),
+      statCard("☾", "Ngủ hôm nay", formatDuration(sleepMinutes), `${todaySleep.length} giấc`),
+      statCard("◇", "Thay tã hôm nay", String(todayDiapers.length), `${wetCount} ướt · ${dirtyCount} đi ngoài`),
+      statCard("!", "Triệu chứng hoạt động", String(activeSymptoms.length), activeSymptoms[0]?.symptoms?.join(", ") || "không có"),
+      statCard("✦", "Thuốc/vitamin đang dùng", String(activeMedications.length), `${data.medicationLogs.filter((item) => isToday(item.takenAt)).length} lần đã ghi hôm nay`),
+      statCard("◷", "Việc chưa hoàn thành", String(pendingReminders.length), pendingReminders[0] ? formatDateTime(pendingReminders[0].scheduledAt) : "không có")
+    );
+    container.append(stats);
+
+    const columns = createElement("section", { className: "grid two-column-grid mb-2" });
+    const upcoming = createElement("div", { className: "card" }); upcoming.append(createElement("h3", { text: "Sắp tới" }));
+    const upcomingList = createElement("div", { className: "activity-list mt-1" });
+    [["✚", nextVaccine ? `${nextVaccine.vaccineName} · ${formatDateTime(nextVaccine.scheduledDate)}` : "Chưa có lịch tiêm sắp tới"], ["♙", nextVisit ? `Tái khám · ${formatDateTime(nextVisit.followUpDate)}` : "Chưa có lịch tái khám"], ["◷", pendingReminders[0] ? `${pendingReminders[0].title} · ${formatDateTime(pendingReminders[0].scheduledAt)}` : "Chưa có nhắc việc"]].forEach(([icon,label]) => { const item=createElement("div",{className:"activity-item"}); item.append(createElement("span",{text:icon}),createElement("div",{text:label})); upcomingList.append(item); });
+    upcoming.append(upcomingList);
+
+    const allergies = createElement("div", { className: "card" }); allergies.append(createElement("h3", { text: "Dị ứng quan trọng" }));
+    const allergyList = createElement("div", { className: "activity-list mt-1" });
+    if (!data.allergies.length) allergyList.append(createElement("p", { className: "muted", text: selectedBaby.allergiesSummary || "Chưa ghi nhận dị ứng." }));
+    data.allergies.slice(0,5).forEach((item) => { const row=createElement("div",{className:"activity-item"}); row.append(createElement("span",{text:"⚑"}),createElement("div",{text:`${item.allergen} · ${item.severity}` })); allergyList.append(row); });
+    allergies.append(allergyList); columns.append(upcoming, allergies); container.append(columns);
+
+    const quick = createElement("section", { className: "card mb-2" }); quick.append(createElement("h3", { text: "Thao tác nhanh" }));
+    const quickGrid = createElement("div", { className: "quick-actions mt-1" });
+    [["◒","Thêm cữ bú","feeding"],["☾","Bắt đầu giấc ngủ","sleep"],["◇","Thêm lần thay tã","diapers"],["℃","Ghi nhiệt độ","symptoms"],["⚖","Thêm cân nặng","growth"],["✦","Ghi nhận thuốc","medications"],["♙","Thêm lịch khám","medical-visits"],["✚","Thêm lịch tiêm","vaccinations"]].forEach((args) => quickGrid.append(quickAction(...args)));
+    quick.append(quickGrid); container.append(quick);
+
+    const recent = createElement("section", { className: "card" }); recent.append(createElement("h3", { text: "Hoạt động gần đây" }));
+    const activities = [
+      ...data.feeding.slice(0,3).map((item) => ({ icon:"◒", date:item.startedAt, text:`Cữ ăn ${item.amount ?? ""} ${item.unit || ""}` })),
+      ...data.sleep.slice(0,3).map((item) => ({ icon:"☾", date:item.startedAt, text:`Giấc ngủ ${formatDuration(durationMinutes(item.startedAt,item.endedAt))}` })),
+      ...data.diapers.slice(0,3).map((item) => ({ icon:"◇", date:item.changedAt, text:`Thay tã: ${item.diaperType}` })),
+      ...data.growth.slice(0,2).map((item) => ({ icon:"⚖", date:item.measuredAt, text:`Tăng trưởng: ${item.weightKg ?? "—"} kg` }))
+    ].sort((a,b) => toDate(b.date)-toDate(a.date)).slice(0,8);
+    const activityList = createElement("div", { className: "activity-list mt-1" });
+    if (!activities.length) activityList.append(createElement("p", { className: "muted", text: "Chưa có hoạt động." }));
+    activities.forEach((item) => { const row=createElement("div",{className:"activity-item"}); const detail=createElement("div"); detail.append(createElement("strong",{text:item.text}),createElement("div",{className:"muted small",text:formatDateTime(item.date)})); row.append(createElement("span",{text:item.icon}),detail); activityList.append(row); });
+    recent.append(activityList); container.append(recent);
+  } catch (error) {
+    console.error(error);
+    renderErrorState(container, friendlyErrorMessage(error, "Không thể tải Dashboard."), () => render(container));
+  }
+  return () => {};
+}
