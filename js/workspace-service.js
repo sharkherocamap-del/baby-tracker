@@ -4,6 +4,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   query,
   serverTimestamp,
   setDoc,
@@ -158,7 +159,13 @@ async function bootstrapLegacyWorkspace(user) {
 
 export async function loadUserWorkspaces(user) {
   const { db } = getFirebaseServices();
-  const membershipQuery = query(collectionGroup(db, "members"), where("uid", "==", user.uid));
+  // The matching collection-group Security Rule checks resource.data.uid.
+  // Keep this equality filter; Firestore Rules are not result filters.
+  const membershipQuery = query(
+    collectionGroup(db, "members"),
+    where("uid", "==", user.uid),
+    limit(100)
+  );
   const snapshots = await getDocs(membershipQuery);
   const entries = [];
   for (const membershipSnapshot of snapshots.docs) {
@@ -182,10 +189,25 @@ export async function resolveWorkspaceAccess(user) {
   try {
     const profile = await ensureUserProfile(user);
     await claimWorkspaceInvitations(user);
-    let workspaces = await loadUserWorkspaces(user);
+
+    let workspaces;
+    try {
+      workspaces = await loadUserWorkspaces(user);
+    } catch (error) {
+      console.error("[Workspace] Không thể truy vấn membership của người dùng.", error);
+      throw error;
+    }
+
     if (!workspaces.length) {
       const bootstrapped = await bootstrapLegacyWorkspace(user);
-      if (bootstrapped) workspaces = await loadUserWorkspaces(user);
+      if (bootstrapped) {
+        try {
+          workspaces = await loadUserWorkspaces(user);
+        } catch (error) {
+          console.error("[Workspace] Bootstrap thành công nhưng không thể đọc lại membership.", error);
+          throw error;
+        }
+      }
     }
     if (!workspaces.length) {
       return { allowed: false, reason: "Tài khoản chưa được mời vào workspace gia đình nào." };
