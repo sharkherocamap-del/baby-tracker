@@ -20,7 +20,7 @@ const config = {
     { name: "category", label: "Nhóm", type: "select", required: true, defaultValue: "motor", options: [
       { value: "motor", label: "Vận động" }, { value: "language", label: "Ngôn ngữ" }, { value: "social", label: "Xã hội" }, { value: "cognitive", label: "Nhận thức" }, { value: "other", label: "Khác" }
     ] },
-    { name: "mediaUrl", label: "URL ảnh/video", type: "url", maxLength: 1000, full: true, hideWhenEmpty: true },
+    { name: "mediaUrl", label: "Ảnh kỷ niệm", type: "image", storagePathField: "mediaStoragePath", full: true, hideWhenEmpty: true, help: "JPG, PNG, WebP hoặc GIF, tối đa 5 MB." },
     { name: "notes", label: "Ghi chú", type: "textarea", maxLength: 1500, full: true, hideWhenEmpty: true }
   ]
 };

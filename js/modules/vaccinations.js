@@ -273,8 +273,15 @@ async function handleCsvFile(file, triggerButton) {
   try {
     const rows = parseVaccinationCsv(await file.text());
     const { selectedBabyId } = getState();
-    const existing = await getCollection(getBabySubcollection(selectedBabyId, "vaccinations"));
-    const existingKeys = new Set(existing.map(duplicateKey));
+    const existingResult = await getAllPagesResult(getBabySubcollection(selectedBabyId, "vaccinations"), {
+      deletedMode: "active",
+      orderByField: "scheduledDate",
+      orderDirection: "desc",
+      pageSize: 100,
+      maxRecords: 10000
+    });
+    if (existingResult.truncated) throw new Error("Danh sách vaccine vượt 10.000 bản ghi; không thể kiểm tra trùng an toàn trên trình duyệt.");
+    const existingKeys = new Set(existingResult.items.map(duplicateKey));
     rows.forEach((row) => { row.duplicateExisting = existingKeys.has(duplicateKey(row.payload)); });
     openImportPreview(rows, file.name);
   } catch (error) {

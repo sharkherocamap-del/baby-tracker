@@ -46,7 +46,7 @@ const config = {
     container.append(card);
     const { selectedBabyId } = getState();
     unsubscribeLogs?.();
-    unsubscribeLogs = subscribeToCollection(getBabySubcollection(selectedBabyId, "medicationLogs"), { orderByField: "takenAt", orderDirection: "desc", limit: 20 }, (logs) => {
+    unsubscribeLogs = subscribeToCollection(getBabySubcollection(selectedBabyId, "medicationLogs"), { orderByField: "takenAt", orderDirection: "desc", limit: 20, deletedMode: "active" }, (logs) => {
       clearElement(logsContainer);
       if (!logs.length) { renderEmptyState(logsContainer, { icon: "medication", title: "Chưa có lịch sử dùng thuốc", message: "Bấm “Ghi đã dùng” ở một thuốc hoặc vitamin." }); return; }
       logs.forEach((log) => {

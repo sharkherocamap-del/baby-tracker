@@ -1,11 +1,24 @@
-import { getState, setSelectedBaby, subscribe } from "../app-state.js";
-import { createDocument, deleteDocument, getBabySubcollection, getCollection, updateDocument } from "../firestore-service.js";
-import { calculateAge, formatDate } from "../date-utils.js";
+import { getState, setSelectedBaby } from "../app-state.js";
+import {
+  createDocument,
+  getBabiesPath,
+  getBabySubcollection,
+  getCollectionPage,
+  getAllPagesResult,
+  deleteDocument,
+  newDocumentId,
+  restoreDocument,
+  runWriteBatch,
+  softDeleteDocument,
+  updateDocument
+} from "../firestore-service.js";
+import { calculateAge, formatDate, formatDateTime } from "../date-utils.js";
 import { confirmDialog, closeModal, openModal } from "../modal.js";
 import { friendlyErrorMessage, showToast } from "../toast.js";
-import { clearElement, createElement, renderEmptyState, safeImage, statusBadge } from "../ui.js";
+import { clearElement, createElement, renderEmptyState, renderLoading, safeImage, statusBadge } from "../ui.js";
 import { isPositiveNumber, isValidUrl, trimText } from "../validators.js";
 import { setButtonContent } from "../icons.js";
+import { deleteStoredImage, uploadBabyImage, validateImageFile } from "../storage-service.js";
 
 const subcollections = ["growthRecords", "vaccinations", "medicalVisits", "feedingRecords", "sleepRecords", "diaperRecords", "symptomRecords", "medications", "medicationLogs", "allergies", "milestones", "teethingRecords", "reminders"];
 
@@ -16,18 +29,21 @@ const fields = [
   { name: "birthDate", label: "Ngày sinh", type: "date", required: true },
   { name: "birthTime", label: "Giờ sinh", type: "time" },
   { name: "birthWeight", label: "Cân nặng lúc sinh (kg)", type: "number", min: 0.01, step: 0.01 },
-  { name: "birthHeight", label: "Chiều cao lúc sinh (cm)", type: "number", min: 0.1, step: 0.1 },
+  { name: "birthHeight", label: "Chiều dài/chiều cao lúc sinh (cm)", type: "number", min: 0.1, step: 0.1 },
   { name: "birthHeadCircumference", label: "Vòng đầu lúc sinh (cm)", type: "number", min: 0.1, step: 0.1 },
   { name: "gestationalWeeks", label: "Tuần thai", type: "number", min: 20, max: 45, step: 1 },
   { name: "bloodType", label: "Nhóm máu", type: "text", maxLength: 10 },
   { name: "hospital", label: "Nơi sinh", type: "text", maxLength: 250 },
-  { name: "avatarUrl", label: "URL ảnh đại diện", type: "url", maxLength: 1000, full: true },
+  { name: "avatarUrl", label: "URL ảnh đại diện (tùy chọn)", type: "url", maxLength: 1000, full: true },
   { name: "allergiesSummary", label: "Tóm tắt dị ứng", type: "textarea", maxLength: 1000, full: true },
   { name: "emergencyContact", label: "Liên hệ khẩn cấp", type: "text", maxLength: 300, full: true },
   { name: "notes", label: "Ghi chú", type: "textarea", maxLength: 1500, full: true }
 ];
 
-function createBabyForm(record = null) {
+function canWrite() { return getState().currentRole !== "viewer"; }
+function isAdmin() { return getState().currentRole === "admin"; }
+
+function createBabyForm(record = null, onSaved = null) {
   const form = createElement("form", { className: "form-grid", attrs: { novalidate: "" } });
   const controls = new Map();
   fields.forEach((field) => {
@@ -53,6 +69,27 @@ function createBabyForm(record = null) {
     controls.set(field.name, { input, error, field });
     form.append(wrapper);
   });
+
+  const imageWrapper = createElement("div", { className: "form-field full" });
+  const imageLabel = createElement("label", { text: "Tải ảnh đại diện lên Firebase Storage", attrs: { for: "baby-avatar-file" } });
+  const imageInput = createElement("input", { attrs: { id: "baby-avatar-file", type: "file", accept: "image/jpeg,image/png,image/webp,image/gif" } });
+  const imageError = createElement("div", { className: "form-error" });
+  const preview = createElement("img", { className: "image-upload-preview", attrs: { alt: "Xem trước ảnh đại diện" } });
+  if (record?.avatarUrl) preview.src = record.avatarUrl; else preview.classList.add("hidden");
+  imageInput.addEventListener("change", () => {
+    imageError.textContent = "";
+    const file = imageInput.files?.[0];
+    if (!file) return;
+    const error = validateImageFile(file);
+    if (error) { imageError.textContent = error; return; }
+    preview.src = URL.createObjectURL(file);
+    preview.classList.remove("hidden");
+  });
+  imageWrapper.append(imageLabel, imageInput, preview, imageError, createElement("div", { className: "form-help", text: "JPG, PNG, WebP hoặc GIF, tối đa 5 MB. Ảnh upload sẽ ưu tiên hơn URL." }));
+  form.append(imageWrapper);
+
+  const progress = createElement("div", { className: "form-help full hidden", attrs: { role: "status" } });
+  form.append(progress);
   const actions = createElement("div", { className: "form-actions full" });
   const cancel = createElement("button", { className: "button button-ghost", attrs: { type: "button" } });
   setButtonContent(cancel, "close", "Hủy");
@@ -74,83 +111,249 @@ function createBabyForm(record = null) {
       if (field.type === "url" && raw && !isValidUrl(raw)) { error.textContent = "URL không hợp lệ."; hasError = true; }
       payload[name] = field.type === "number" ? (raw ? Number(raw) : null) : trimText(raw, field.maxLength || 1500);
     });
+    const file = imageInput.files?.[0];
+    const fileError = file ? validateImageFile(file) : "";
+    if (fileError) { imageError.textContent = fileError; hasError = true; }
     if (hasError) return;
     submit.disabled = true; cancel.disabled = true;
+    const babiesPath = getBabiesPath();
+    const babyId = record?.id || newDocumentId(babiesPath);
+    let uploadedPath = null;
     try {
-      if (record) await updateDocument("babies", record.id, payload);
+      if (file) {
+        progress.classList.remove("hidden");
+        const uploaded = await uploadBabyImage({ babyId, file, folder: "avatar", onProgress: (percent) => { progress.textContent = `Đang tải ảnh: ${percent}%`; } });
+        payload.avatarUrl = uploaded.url;
+        payload.avatarStoragePath = uploaded.storagePath;
+        uploadedPath = uploaded.storagePath;
+      } else if (record?.avatarStoragePath) payload.avatarStoragePath = record.avatarStoragePath;
+      if (record) await updateDocument(babiesPath, record.id, payload);
       else {
-        const created = await createDocument("babies", payload);
+        const created = await createDocument(babiesPath, payload, { id: babyId });
         setSelectedBaby(created.id);
+      }
+      if (record?.avatarStoragePath && uploadedPath && record.avatarStoragePath !== uploadedPath) {
+        try { await deleteStoredImage(record.avatarStoragePath); } catch (cleanupError) { console.error("Không thể xóa ảnh đại diện cũ", cleanupError); }
       }
       showToast(record ? "Đã cập nhật hồ sơ em bé." : "Đã tạo hồ sơ em bé.", "success");
       closeModal();
-    } catch (error) { console.error(error); showToast(friendlyErrorMessage(error, "Không thể lưu hồ sơ."), "error"); }
+      onSaved?.();
+    } catch (error) {
+      console.error(error);
+      if (uploadedPath) { try { await deleteStoredImage(uploadedPath); } catch (cleanupError) { console.error("Không thể dọn ảnh upload thất bại", cleanupError); } }
+      showToast(friendlyErrorMessage(error, "Không thể lưu hồ sơ."), "error");
+    }
     finally { submit.disabled = false; cancel.disabled = false; }
   });
   return form;
 }
 
-async function removeBaby(baby) {
-  const found = [];
+async function purgeBaby(baby) {
+  const confirmed = await confirmDialog({ title: "Xóa vĩnh viễn toàn bộ hồ sơ?", message: "Tất cả dữ liệu con và ảnh đại diện sẽ bị xóa. Thao tác này không thể hoàn tác.", confirmLabel: "Xóa vĩnh viễn", danger: true, requireText: "XÓA" });
+  if (!confirmed) return;
   try {
+    const operations = [];
+    const storagePaths = new Set(baby.avatarStoragePath ? [baby.avatarStoragePath] : []);
     for (const name of subcollections) {
-      const records = await getCollection(getBabySubcollection(baby.id, name), { limit: 1 });
-      if (records.length) found.push(name);
+      const pageResult = await getAllPagesResult(getBabySubcollection(baby.id, name), { deletedMode: undefined, orderByField: "createdAt", orderDirection: "asc", maxRecords: 10000 });
+      if (pageResult.truncated) throw new Error(`Subcollection ${name} có hơn 10.000 bản ghi. Hãy xóa theo từng nhóm trước khi purge hồ sơ.`);
+      pageResult.items.forEach((record) => {
+        operations.push({ type: "delete", path: getBabySubcollection(baby.id, name), id: record.id });
+        if (record.mediaStoragePath) storagePaths.add(record.mediaStoragePath);
+      });
     }
-  } catch (error) { console.error(error); showToast(friendlyErrorMessage(error, "Không thể kiểm tra dữ liệu con."), "error"); return; }
-  if (found.length) {
-    showToast(`Không thể xóa. Hãy xóa dữ liệu trong: ${found.join(", ")}.`, "warning", 9000);
-    return;
-  }
-  const first = await confirmDialog({ title: "Xóa hồ sơ em bé?", message: "Firestore không tự xóa subcollection khi xóa document cha. Kiểm tra hiện tại cho thấy các nhóm dữ liệu con đang trống.", confirmLabel: "Tiếp tục", danger: true });
-  if (!first) return;
-  const second = await confirmDialog({ title: "Xác nhận lần cuối", message: `Bạn sắp xóa hồ sơ “${baby.name}”. Thao tác này không thể hoàn tác.`, confirmLabel: "Xóa hồ sơ", danger: true, requireText: "XÓA" });
-  if (!second) return;
-  try { await deleteDocument("babies", baby.id); showToast("Đã xóa hồ sơ em bé.", "success"); }
-  catch (error) { console.error(error); showToast(friendlyErrorMessage(error, "Không thể xóa hồ sơ."), "error"); }
+    await runWriteBatch(operations);
+    for (const storagePath of storagePaths) {
+      try { await deleteStoredImage(storagePath); } catch (error) { console.error("Không thể xóa file Storage", storagePath, error); }
+    }
+    await deleteDocument(getBabiesPath(), baby.id);
+    showToast("Đã xóa vĩnh viễn hồ sơ và dữ liệu con.", "success");
+  } catch (error) { console.error(error); showToast(friendlyErrorMessage(error, "Không thể xóa vĩnh viễn hồ sơ."), "error"); }
 }
 
 function renderCards(container) {
-  const state = getState();
   clearElement(container);
+  const state = getState();
   const header = createElement("div", { className: "view-header" });
-  const intro = createElement("div"); intro.append(createElement("h2", { text: "Hồ sơ em bé" }), createElement("p", { className: "muted", text: "Quản lý một hoặc nhiều em bé trong workspace gia đình." }));
+  const intro = createElement("div");
+  intro.append(
+    createElement("h2", { text: "Hồ sơ em bé" }),
+    createElement("p", { className: "muted", text: `Quản lý em bé trong workspace “${state.currentWorkspace?.name || "Gia đình"}”.` })
+  );
+  const actions = createElement("div", { className: "view-actions" });
+  const trash = createElement("button", { className: "button button-ghost", attrs: { type: "button" } });
+  setButtonContent(trash, "delete_sweep", "Thùng rác");
   const add = createElement("button", { className: "button button-primary", attrs: { type: "button" } });
   setButtonContent(add, "person_add", "Thêm em bé");
-  add.addEventListener("click", () => openModal({ title: "Thêm hồ sơ em bé", content: createBabyForm() }));
-  header.append(intro, add); container.append(header);
-  const list = createElement("div", { className: "grid dashboard-grid" }); container.append(list);
-  if (!state.babies.length) { renderEmptyState(list, { icon: "child_care", title: "Chưa có hồ sơ em bé", message: "Tạo hồ sơ đầu tiên để bắt đầu theo dõi.", actionLabel: "Thêm em bé", onAction: () => openModal({ title: "Thêm hồ sơ em bé", content: createBabyForm() }) }); return; }
-  state.babies.forEach((baby) => {
-    const card = createElement("article", { className: "card record-card" });
-    const top = createElement("div", { className: "flex items-center gap-1" });
-    const img = createElement("img", { attrs: { alt: `Ảnh ${baby.name}`, width: "72", height: "72" } });
-    img.style.borderRadius = "18px"; img.style.objectFit = "cover"; safeImage(img, baby.avatarUrl);
-    const identity = createElement("div"); identity.append(createElement("h3", { text: baby.name }), createElement("p", { className: "muted small", text: baby.nickname ? `${baby.nickname} · ${calculateAge(baby.birthDate)}` : calculateAge(baby.birthDate) }));
-    if (baby.id === state.selectedBabyId) identity.append(statusBadge("Đang theo dõi", "success"));
-    top.append(img, identity); card.append(top);
-    const details = createElement("div", { className: "record-fields" });
-    [["Ngày sinh", baby.birthDate ? formatDate(baby.birthDate) : "—"], ["Nhóm máu", baby.bloodType || "—"], ["Nơi sinh", baby.hospital || "—"], ["Dị ứng", baby.allergiesSummary || "Chưa ghi nhận"]].forEach(([label, value]) => {
-      const item = createElement("div", { className: "record-field" }); item.append(createElement("span", { text: label }), createElement("span", { text: String(value) })); details.append(item);
-    });
-    card.append(details);
-    const actions = createElement("div", { className: "record-actions" });
-    const select = createElement("button", { className: "button button-secondary", attrs: { type: "button" } });
-    setButtonContent(select, "check_circle", "Chọn");
-    const edit = createElement("button", { className: "button button-ghost", attrs: { type: "button" } });
-    setButtonContent(edit, "edit", "Sửa");
-    const remove = createElement("button", { className: "button button-ghost text-danger", attrs: { type: "button" } });
-    setButtonContent(remove, "delete", "Xóa");
-    select.disabled = baby.id === state.selectedBabyId;
-    select.addEventListener("click", () => { setSelectedBaby(baby.id); const selector = document.getElementById("baby-selector"); if (selector) selector.value = baby.id; showToast(`Đã chọn ${baby.nickname || baby.name}.`, "success"); });
-    edit.addEventListener("click", () => openModal({ title: "Sửa hồ sơ em bé", content: createBabyForm(baby) }));
-    remove.addEventListener("click", () => removeBaby(baby));
-    actions.append(select, edit, remove); card.append(actions); list.append(card);
+  add.disabled = !canWrite();
+  actions.append(trash, add);
+  header.append(intro, actions);
+  container.append(header);
+
+  const list = createElement("div", { className: "grid dashboard-grid" });
+  const pagination = createElement("div", { className: "pagination-bar" });
+  const previous = createElement("button", { className: "button button-ghost", attrs: { type: "button" } });
+  setButtonContent(previous, "chevron_left", "Trang trước");
+  const pageLabel = createElement("span", { className: "muted small" });
+  const next = createElement("button", { className: "button button-ghost", attrs: { type: "button" } });
+  setButtonContent(next, "chevron_right", "Trang sau");
+  pagination.append(previous, pageLabel, next);
+  container.append(list, pagination);
+
+  let trashMode = false;
+  let pages = [];
+  let pageIndex = 0;
+
+  function draw() {
+    const page = pages[pageIndex] || { items: [], hasMore: false };
+    clearElement(list);
+    if (!page.items.length) {
+      renderEmptyState(list, {
+        icon: trashMode ? "delete_sweep" : "child_care",
+        title: trashMode ? "Thùng rác hồ sơ đang trống" : "Chưa có hồ sơ em bé",
+        message: trashMode ? "Hồ sơ xóa mềm sẽ xuất hiện ở đây." : "Tạo hồ sơ đầu tiên để bắt đầu theo dõi.",
+        actionLabel: !trashMode && canWrite() ? "Thêm em bé" : "",
+        onAction: !trashMode && canWrite() ? () => openModal({ title: "Thêm hồ sơ em bé", content: createBabyForm(null, refresh) }) : null
+      });
+    } else {
+      page.items.forEach((baby) => {
+        const currentState = getState();
+        const card = createElement("article", { className: `card record-card${trashMode ? " record-card-deleted" : ""}` });
+        const top = createElement("div", { className: "flex items-center gap-1" });
+        const img = createElement("img", { attrs: { alt: `Ảnh ${baby.name}`, width: "72", height: "72" } });
+        img.style.borderRadius = "18px";
+        img.style.objectFit = "cover";
+        safeImage(img, baby.avatarUrl);
+        const identity = createElement("div");
+        identity.append(
+          createElement("h3", { text: baby.name }),
+          createElement("p", { className: "muted small", text: baby.nickname ? `${baby.nickname} · ${calculateAge(baby.birthDate)}` : calculateAge(baby.birthDate) })
+        );
+        if (!trashMode && baby.id === currentState.selectedBabyId) identity.append(statusBadge("Đang theo dõi", "success"));
+        if (trashMode && baby.deletedAt) identity.append(createElement("p", { className: "muted small", text: `Đã xóa ${formatDateTime(baby.deletedAt)}` }));
+        top.append(img, identity);
+        card.append(top);
+
+        const details = createElement("div", { className: "record-fields" });
+        [["Ngày sinh", baby.birthDate ? formatDate(baby.birthDate) : "—"], ["Nhóm máu", baby.bloodType || "—"], ["Nơi sinh", baby.hospital || "—"], ["Dị ứng", baby.allergiesSummary || "Chưa ghi nhận"]].forEach(([label, value]) => {
+          const item = createElement("div", { className: "record-field" });
+          item.append(createElement("span", { text: label }), createElement("span", { text: String(value) }));
+          details.append(item);
+        });
+        card.append(details);
+
+        const cardActions = createElement("div", { className: "record-actions" });
+        if (trashMode) {
+          const restore = createElement("button", { className: "button button-secondary", attrs: { type: "button" } });
+          setButtonContent(restore, "restore_from_trash", "Khôi phục");
+          restore.disabled = !canWrite();
+          restore.addEventListener("click", async () => {
+            try {
+              await restoreDocument(getBabiesPath(), baby.id);
+              showToast("Đã khôi phục hồ sơ em bé.", "success");
+              await refresh();
+            } catch (error) {
+              console.error(error);
+              showToast(friendlyErrorMessage(error), "error");
+            }
+          });
+          cardActions.append(restore);
+          if (isAdmin()) {
+            const purge = createElement("button", { className: "button button-ghost text-danger", attrs: { type: "button" } });
+            setButtonContent(purge, "delete_forever", "Xóa vĩnh viễn");
+            purge.addEventListener("click", async () => { await purgeBaby(baby); await refresh(); });
+            cardActions.append(purge);
+          }
+        } else {
+          const select = createElement("button", { className: "button button-secondary", attrs: { type: "button" } });
+          setButtonContent(select, "check_circle", "Chọn");
+          select.disabled = baby.id === currentState.selectedBabyId;
+          const edit = createElement("button", { className: "button button-ghost", attrs: { type: "button" } });
+          setButtonContent(edit, "edit", "Sửa");
+          edit.disabled = !canWrite();
+          const remove = createElement("button", { className: "button button-ghost text-danger", attrs: { type: "button" } });
+          setButtonContent(remove, "delete", "Đưa vào thùng rác");
+          remove.disabled = !canWrite();
+          select.addEventListener("click", () => {
+            setSelectedBaby(baby.id);
+            const selector = document.getElementById("baby-selector");
+            if (selector) selector.value = baby.id;
+            showToast(`Đã chọn ${baby.nickname || baby.name}.`, "success");
+            draw();
+          });
+          edit.addEventListener("click", () => openModal({ title: "Sửa hồ sơ em bé", content: createBabyForm(baby, refresh) }));
+          remove.addEventListener("click", async () => {
+            const ok = await confirmDialog({
+              title: "Đưa hồ sơ vào thùng rác?",
+              message: "Dữ liệu con được giữ nguyên và sẽ xuất hiện lại khi khôi phục hồ sơ.",
+              confirmLabel: "Đưa vào thùng rác",
+              danger: true
+            });
+            if (!ok) return;
+            try {
+              await softDeleteDocument(getBabiesPath(), baby.id);
+              showToast("Đã đưa hồ sơ vào thùng rác.", "success");
+              await refresh();
+            } catch (error) {
+              console.error(error);
+              showToast(friendlyErrorMessage(error), "error");
+            }
+          });
+          cardActions.append(select, edit, remove);
+        }
+        card.append(cardActions);
+        list.append(card);
+      });
+    }
+    pageLabel.textContent = `Trang ${pageIndex + 1} · ${page.items.length} hồ sơ`;
+    previous.disabled = pageIndex === 0;
+    next.disabled = !page.hasMore && pageIndex >= pages.length - 1;
+  }
+
+  async function loadPage(index, cursor = null) {
+    renderLoading(list);
+    try {
+      const page = await getCollectionPage(getBabiesPath(), {
+        deletedMode: trashMode ? "trash" : "active",
+        orderByField: trashMode ? "deletedAt" : "name",
+        orderDirection: trashMode ? "desc" : "asc",
+        pageSize: 12,
+        startAfterDocument: cursor
+      });
+      pages[index] = page;
+      pages = pages.slice(0, index + 1);
+      pageIndex = index;
+      draw();
+    } catch (error) {
+      console.error(error);
+      clearElement(list);
+      renderEmptyState(list, { icon: "error", title: "Không thể tải hồ sơ", message: friendlyErrorMessage(error) });
+    }
+  }
+
+  async function refresh() {
+    pages = [];
+    pageIndex = 0;
+    await loadPage(0);
+  }
+
+  add.addEventListener("click", () => openModal({ title: "Thêm hồ sơ em bé", content: createBabyForm(null, refresh) }));
+  trash.addEventListener("click", async () => {
+    trashMode = !trashMode;
+    setButtonContent(trash, trashMode ? "arrow_back" : "delete_sweep", trashMode ? "Quay lại hồ sơ" : "Thùng rác");
+    add.classList.toggle("hidden", trashMode);
+    await refresh();
   });
+  previous.addEventListener("click", () => { if (pageIndex > 0) { pageIndex -= 1; draw(); } });
+  next.addEventListener("click", async () => {
+    if (pageIndex + 1 < pages.length) { pageIndex += 1; draw(); return; }
+    const page = pages[pageIndex];
+    if (page?.hasMore && page.lastDocument) await loadPage(pageIndex + 1, page.lastDocument);
+  });
+  refresh();
 }
 
 export function render(container) {
   renderCards(container);
-  const unsubscribe = subscribe(() => renderCards(container));
-  return unsubscribe;
+  return () => {};
 }

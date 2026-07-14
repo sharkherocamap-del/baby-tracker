@@ -1,5 +1,5 @@
 import { getState } from "../app-state.js";
-import { getBabySubcollection, getCollection } from "../firestore-service.js";
+import { Timestamp, getBabySubcollection, getCollection } from "../firestore-service.js";
 import { calculateAge, durationMinutes, formatDate, formatDateTime, formatDuration, startOfLocalDay, toDate } from "../date-utils.js";
 import { friendlyErrorMessage } from "../toast.js";
 import { clearElement, createElement, renderEmptyState, renderErrorState, renderLoading, safeImage, statusBadge } from "../ui.js";
@@ -24,17 +24,51 @@ function quickAction(icon, label, route) {
 }
 
 async function fetchDashboardData(babyId) {
-  const specs = {
-    growth: ["growthRecords", "measuredAt", "desc", 10], vaccines: ["vaccinations", "scheduledDate", "asc", 100], visits: ["medicalVisits", "visitDate", "desc", 50],
-    feeding: ["feedingRecords", "startedAt", "desc", 200], sleep: ["sleepRecords", "startedAt", "desc", 100], diapers: ["diaperRecords", "changedAt", "desc", 100],
-    symptoms: ["symptomRecords", "recordedAt", "desc", 100], medications: ["medications", "startDate", "desc", 100], medicationLogs: ["medicationLogs", "takenAt", "desc", 100],
-    allergies: ["allergies", "discoveredAt", "desc", 100], reminders: ["reminders", "scheduledAt", "asc", 100]
+  const dayStart = todayStart();
+  const now = new Date();
+  const active = (name, orderByField, orderDirection = "desc", limit = 100, where = []) =>
+    getCollection(getBabySubcollection(babyId, name), {
+      orderByField, orderDirection, limit, deletedMode: "active", where
+    });
+  const [
+    growth, vaccines, visits, feeding, sleep, diapers, symptoms, activeSymptoms,
+    activeMedications, medicationLogs, allergies, reminders
+  ] = await Promise.all([
+    active("growthRecords", "measuredAt", "desc", 10),
+    active("vaccinations", "scheduledDate", "asc", 30, [
+      { field: "scheduledDate", operator: ">=", value: Timestamp.fromDate(dayStart) }
+    ]),
+    active("medicalVisits", "followUpDate", "asc", 30, [
+      { field: "followUpDate", operator: ">=", value: Timestamp.fromDate(now) }
+    ]),
+    active("feedingRecords", "startedAt", "desc", 500, [
+      { field: "startedAt", operator: ">=", value: Timestamp.fromDate(dayStart) }
+    ]),
+    active("sleepRecords", "startedAt", "desc", 200, [
+      { field: "startedAt", operator: ">=", value: Timestamp.fromDate(dayStart) }
+    ]),
+    active("diaperRecords", "changedAt", "desc", 500, [
+      { field: "changedAt", operator: ">=", value: Timestamp.fromDate(dayStart) }
+    ]),
+    active("symptomRecords", "recordedAt", "desc", 20),
+    active("symptomRecords", "recordedAt", "desc", 100, [
+      { field: "active", operator: "==", value: true }
+    ]),
+    active("medications", "startDate", "desc", 100, [
+      { field: "active", operator: "==", value: true }
+    ]),
+    active("medicationLogs", "takenAt", "desc", 500, [
+      { field: "takenAt", operator: ">=", value: Timestamp.fromDate(dayStart) }
+    ]),
+    active("allergies", "discoveredAt", "desc", 100),
+    active("reminders", "scheduledAt", "asc", 100, [
+      { field: "scheduledAt", operator: ">=", value: Timestamp.fromDate(dayStart) }
+    ])
+  ]);
+  return {
+    growth, vaccines, visits, feeding, sleep, diapers, symptoms, activeSymptoms,
+    medications: activeMedications, medicationLogs, allergies, reminders
   };
-  const entries = await Promise.all(Object.entries(specs).map(async ([key, [name, orderByField, orderDirection, limit]]) => {
-    const records = await getCollection(getBabySubcollection(babyId, name), { orderByField, orderDirection, limit });
-    return [key, records];
-  }));
-  return Object.fromEntries(entries);
 }
 
 export async function render(container) {
@@ -62,8 +96,7 @@ export async function render(container) {
     const latestTemp = data.symptoms.find((item) => Number.isFinite(item.temperatureCelsius));
     const now = new Date();
     const nextVaccine = data.vaccines.find((item) => toDate(item.scheduledDate) >= now && !["completed", "cancelled"].includes(item.status));
-    const followUps = data.visits.filter((item) => item.followUpDate && toDate(item.followUpDate) >= now).sort((a,b) => toDate(a.followUpDate)-toDate(b.followUpDate));
-    const nextVisit = followUps[0];
+    const nextVisit = data.visits[0];
     const todayFeeding = data.feeding.filter((item) => isToday(item.startedAt));
     const milkMl = todayFeeding.filter((item) => ["formula","breast_milk_bottle"].includes(item.feedingType) && item.unit === "ml").reduce((sum,item) => sum + (Number(item.amount) || 0), 0);
     const todaySleep = data.sleep.filter((item) => isToday(item.startedAt));
@@ -71,8 +104,8 @@ export async function render(container) {
     const todayDiapers = data.diapers.filter((item) => isToday(item.changedAt));
     const wetCount = todayDiapers.filter((item) => ["wet","both"].includes(item.diaperType)).length;
     const dirtyCount = todayDiapers.filter((item) => ["dirty","both"].includes(item.diaperType)).length;
-    const activeSymptoms = data.symptoms.filter((item) => item.active === true);
-    const activeMedications = data.medications.filter((item) => item.active === true);
+    const activeSymptoms = data.activeSymptoms;
+    const activeMedications = data.medications;
     const pendingReminders = data.reminders.filter((item) => !item.completed && toDate(item.scheduledAt) >= todayStart());
 
     const stats = createElement("section", { className: "grid dashboard-grid mb-2" });
