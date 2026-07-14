@@ -1,0 +1,49 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function membershipPath(workspaceId) {
+      return /databases/(default)/documents/workspaces/$(workspaceId)/members/$(request.auth.uid);
+    }
+
+    function isWorkspaceMember(workspaceId) {
+      return isSignedIn()
+        && firestore.exists(membershipPath(workspaceId))
+        && firestore.get(membershipPath(workspaceId)).data.active == true
+        && firestore.get(membershipPath(workspaceId)).data.role in ['admin', 'member', 'viewer'];
+    }
+
+    function canWriteWorkspace(workspaceId) {
+      return isWorkspaceMember(workspaceId)
+        && firestore.get(membershipPath(workspaceId)).data.role in ['admin', 'member'];
+    }
+
+    function isWorkspaceAdmin(workspaceId) {
+      return isWorkspaceMember(workspaceId)
+        && firestore.get(membershipPath(workspaceId)).data.role == 'admin';
+    }
+
+    function validImage(workspaceId, babyId) {
+      return request.resource != null
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp|gif)')
+        && request.resource.metadata.workspaceId == workspaceId
+        && request.resource.metadata.babyId == babyId
+        && request.resource.metadata.uploadedByUid == request.auth.uid;
+    }
+
+    match /workspaces/{workspaceId}/babies/{babyId}/images/{allPaths=**} {
+      allow read: if isWorkspaceMember(workspaceId);
+      allow create: if canWriteWorkspace(workspaceId) && validImage(workspaceId, babyId);
+      allow update: if false;
+      allow delete: if canWriteWorkspace(workspaceId);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
