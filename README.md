@@ -1,103 +1,432 @@
-# Baby Tracker
+# Baby Tracker — Family Workspace Edition
 
+Ứng dụng web tĩnh để gia đình theo dõi sức khỏe, sinh hoạt và quá trình phát triển của em bé. Ứng dụng chạy trực tiếp trên GitHub Pages, dùng JavaScript ES Modules, Firebase Authentication, Cloud Firestore, Cloud Storage và Chart.js; không cần server riêng hoặc bước build.
 
+> Thông tin trong ứng dụng chỉ dùng để ghi chép và tham khảo, không thay thế việc thăm khám hoặc tư vấn của bác sĩ. Chỉ số WHO là tham chiếu thống kê, không phải chẩn đoán.
 
-## Cập nhật giao diện icon và dữ liệu demo đầy đủ
+## 1. Những nâng cấp chính
 
-Phiên bản này bổ sung bộ icon **Material Symbols Rounded** cho navigation, Dashboard, thao tác nhanh, nút CRUD, timer, import CSV, modal, toast và trang cài đặt. Icon được tải qua Google Fonts cùng với font Be Vietnam Pro; nội dung và nhãn `aria-label` vẫn được giữ để hỗ trợ accessibility.
+Phiên bản này bổ sung sáu nhóm chức năng lớn:
 
-Admin mở **Cài đặt → Tạo/hoàn thiện dữ liệu demo** để tạo các hồ sơ còn thiếu:
+1. **Family workspace và membership riêng**
+   - Một tài khoản có thể thuộc nhiều workspace gia đình.
+   - Dữ liệu em bé nằm dưới đúng workspace, không còn dùng collection sức khỏe global.
+   - Ba vai trò: `admin`, `member`, `viewer`.
+   - Chủ workspace luôn phải là admin đang hoạt động.
+   - Lời mời gắn với email Google và được nhận tự động khi người đó đăng nhập.
 
-- Hồ sơ demo cơ bản `Nguyễn An Nhiên (Bông)`.
-- Hồ sơ demo đầy đủ `Trần Gia Hân (Mây)`.
+2. **Soft delete và khôi phục**
+   - Xóa thông thường chỉ chuyển document vào Thùng rác.
+   - Admin/member có thể khôi phục.
+   - Chỉ admin được xóa vĩnh viễn.
+   - Khi purge hồ sơ bé, ứng dụng xử lý toàn bộ subcollection và ảnh Storage có liên quan.
 
-Hồ sơ đầy đủ có dữ liệu tại tất cả 13 nhóm Firestore: tăng trưởng, tiêm phòng, khám bệnh, ăn uống, giấc ngủ, thay tã, triệu chứng, thuốc, lịch sử dùng thuốc, dị ứng, mốc phát triển, mọc răng và nhắc việc. Mỗi hồ sơ có marker riêng trong trường `notes`, vì vậy bấm nút nhiều lần không tạo trùng hồ sơ demo. Toàn bộ nội dung y tế trong demo chỉ dùng để thử giao diện, không phải tư vấn hoặc chỉ định y khoa.
+3. **Firebase Storage cho ảnh**
+   - Upload ảnh đại diện và ảnh mốc phát triển.
+   - Chấp nhận JPG, PNG, WebP, GIF; tối đa 5 MB.
+   - Storage Rules kiểm tra membership, role, MIME type, kích thước và metadata workspace/baby.
 
-Ứng dụng web tĩnh mobile-first để một nhóm thành viên gia đình được cấp quyền cùng ghi chép sức khỏe, sinh hoạt và quá trình phát triển của em bé.
+4. **Phân trang thật bằng Firestore `startAfter()`**
+   - Mỗi màn hình tải từng trang bằng cursor `DocumentSnapshot`.
+   - Có Trang trước/Trang sau và cache các trang đã mở trong phiên màn hình.
+   - Báo cáo, backup, migration và kiểm tra trùng CSV cũng đọc tuần tự qua cursor thay vì một query không giới hạn.
 
-> **Cảnh báo y tế:** Thông tin trong ứng dụng chỉ dùng để ghi chép và tham khảo, không thay thế việc thăm khám hoặc tư vấn của bác sĩ. Ứng dụng không tự chẩn đoán, kê đơn hoặc đề xuất liều thuốc.
+5. **Import JSON backup có validate schema — chỉ admin**
+   - Backup schema version 2.
+   - Whitelist collection và field.
+   - Kiểm tra kiểu dữ liệu, enum, ngày giờ, range số, ID trùng và liên kết nội bộ.
+   - Import thành hồ sơ mới, không ghi đè hồ sơ đang có.
+   - Tự ánh xạ ID thuốc/nhắc việc sang ID mới.
+   - Có rollback các batch đã commit nếu import bị gián đoạn.
 
-## 1. Tính năng
+6. **WHO Child Growth Standards 0–5 tuổi**
+   - Cân nặng theo tuổi.
+   - Chiều dài/chiều cao theo tuổi.
+   - Vòng đầu theo tuổi.
+   - Dùng dữ liệu LMS chính thức theo từng ngày tuổi và giới tính.
+   - Hiển thị z-score, percentile tham chiếu trong ±3 SD và đường trung vị/±2 SD trên biểu đồ.
+   - Không tự kết luận thiếu cân, thấp còi, thừa cân hoặc bệnh lý.
 
-- Google Sign-In với Firebase Authentication.
-- Chỉ email tồn tại tại `allowedUsers/{email-viết-thường}` và có `active == true` mới được vào ứng dụng.
-- Hai vai trò `admin` và `member`.
-- Nhiều hồ sơ em bé trong một shared family workspace.
-- Dashboard tổng hợp tăng trưởng, nhiệt độ, tiêm phòng, tái khám, ăn uống, ngủ, thay tã, triệu chứng, thuốc, dị ứng và nhắc việc.
-- CRUD cho tăng trưởng, vaccine, khám bệnh, ăn uống, giấc ngủ, thay tã, triệu chứng, thuốc/vitamin, dị ứng, mốc phát triển, mọc răng và nhắc việc.
-- Timer bú mẹ và timer giấc ngủ chạy khi trang module đang mở.
-- Biểu đồ tăng trưởng và giấc ngủ bằng Chart.js.
-- Quản lý allowed users dành riêng cho admin.
-- Xuất JSON backup, CSV UTF-8 BOM và in tóm tắt đi khám.
-- Nhập hàng loạt lịch tiêm phòng từ CSV với xem trước, validation và bỏ qua dữ liệu trùng.
-- Dark mode, desktop sidebar, mobile bottom navigation, modal có focus trap, toast, loading/empty/error states.
-- Không có backend riêng, Node.js, npm, build tool, Firebase Storage, Cloud Functions hoặc Admin SDK ở frontend.
+## 2. Công nghệ
 
-## 2. Kiến trúc
+- HTML5, CSS3, JavaScript ES Modules.
+- Firebase JavaScript SDK **12.16.0** qua CDN chính thức.
+- Firebase Authentication — Google Sign-In.
+- Cloud Firestore.
+- Cloud Storage for Firebase.
+- Chart.js **4.5.1**.
+- Material Symbols Rounded.
+- GitHub Pages.
+- Không React/Vue/Angular, không Node.js trong runtime, không bundler trong deployment.
+
+## 3. Kiến trúc dữ liệu
+
+### 3.1 User profile
 
 ```text
-Browser / GitHub Pages
-        │
-        ├── index.html + CSS + JavaScript ES Modules
-        │
-        ├── Firebase Authentication ── Google Sign-In
-        │             │
-        │             └── onAuthStateChanged
-        │
-        └── Cloud Firestore
-              ├── allowedUsers/{emailLowercase}
-              └── babies/{babyId}/...
+users/{uid}
 ```
 
-Ứng dụng là SPA nhỏ dùng hash routing, ví dụ `#/dashboard`, `#/growth`, `#/users`. `index.html` luôn ở root nên GitHub Pages không cần rewrite route phía server.
+```javascript
+{
+  uid: "firebase-auth-uid",
+  email: "user@gmail.com",
+  displayName: "Tên hiển thị",
+  photoURL: "https://...",
+  active: true,
+  createdAt: Timestamp,
+  updatedAt: Timestamp
+}
+```
 
-### Luồng Authentication và Authorization
+### 3.2 Workspace
+
+```text
+workspaces/{workspaceId}
+```
+
+```javascript
+{
+  name: "Gia đình Nguyễn",
+  slug: "gia-dinh-nguyen",
+  active: true,
+  ownerUid: "uid-admin-đầu-tiên",
+  createdByUid: "...",
+  createdByEmail: "...",
+  createdAt: Timestamp,
+  updatedAt: Timestamp,
+  legacyMigrationStatus: "pending | completed | not-applicable"
+}
+```
+
+### 3.3 Membership
+
+```text
+workspaces/{workspaceId}/members/{uid}
+```
+
+```javascript
+{
+  uid: "...",
+  email: "member@gmail.com",
+  displayName: "Mẹ",
+  role: "admin | member | viewer",
+  active: true,
+  invitedByUid: "...",
+  invitedByEmail: "...",
+  joinedAt: Timestamp,
+  createdAt: Timestamp,
+  updatedAt: Timestamp
+}
+```
+
+Quyền:
+
+| Role | Đọc | Thêm/sửa/xóa mềm | Khôi phục | Xóa vĩnh viễn | Quản lý thành viên | Import JSON |
+|---|---:|---:|---:|---:|---:|---:|
+| admin | Có | Có | Có | Có | Có | Có |
+| member | Có | Có | Có | Không | Không | Không |
+| viewer | Có | Không | Không | Không | Không | Không |
+
+Chủ workspace không thể bị hạ role, khóa hoặc xóa membership. Admin cũng không thể tự khóa hoặc tự hạ role của chính mình.
+
+### 3.4 Lời mời
+
+Hai bản mirror được ghi atomically:
+
+```text
+workspaceInvites/{email}/memberships/{workspaceId}
+workspaces/{workspaceId}/invites/{email}
+```
+
+- Bản đầu cho người được mời tìm lời mời theo đúng email đăng nhập.
+- Bản thứ hai cho admin workspace quản lý danh sách lời mời.
+- Khi đăng nhập, membership được tạo với UID thật và lời mời chuyển thành `claimed`.
+
+### 3.5 Dữ liệu em bé
+
+```text
+workspaces/{workspaceId}/babies/{babyId}
+workspaces/{workspaceId}/babies/{babyId}/growthRecords/{recordId}
+workspaces/{workspaceId}/babies/{babyId}/vaccinations/{recordId}
+workspaces/{workspaceId}/babies/{babyId}/medicalVisits/{recordId}
+workspaces/{workspaceId}/babies/{babyId}/feedingRecords/{recordId}
+workspaces/{workspaceId}/babies/{babyId}/sleepRecords/{recordId}
+workspaces/{workspaceId}/babies/{babyId}/diaperRecords/{recordId}
+workspaces/{workspaceId}/babies/{babyId}/symptomRecords/{recordId}
+workspaces/{workspaceId}/babies/{babyId}/medications/{recordId}
+workspaces/{workspaceId}/babies/{babyId}/medicationLogs/{recordId}
+workspaces/{workspaceId}/babies/{babyId}/allergies/{recordId}
+workspaces/{workspaceId}/babies/{babyId}/milestones/{recordId}
+workspaces/{workspaceId}/babies/{babyId}/teethingRecords/{recordId}
+workspaces/{workspaceId}/babies/{babyId}/reminders/{recordId}
+```
+
+Mỗi hồ sơ/bản ghi có metadata:
+
+```javascript
+{
+  createdByUid: "...",
+  createdByEmail: "...",
+  createdAt: Timestamp,
+  updatedAt: Timestamp,
+  isDeleted: false,
+  deletedAt: null,
+  deletedByUid: null,
+  deletedByEmail: null
+}
+```
+
+## 4. Luồng Authentication và Authorization
 
 ```text
 Mở website
-   │
-   ├── Firebase config còn YOUR_ ? ── Có ──> Màn hình lỗi cấu hình
-   │
-   └── Không
-        │
-        └── onAuthStateChanged
-              │
-              ├── Chưa đăng nhập ──> Màn hình Google Sign-In
-              │
-              └── Đã đăng nhập
-                    │
-                    ├── Chuẩn hóa email: trim().toLowerCase()
-                    ├── GET allowedUsers/{email}
-                    │
-                    ├── Không tồn tại / inactive / role sai
-                    │       └── Không tải dữ liệu sức khỏe, signOut
-                    │
-                    └── Hợp lệ
-                            ├── Gán role vào app state
-                            ├── Bắt đầu listener babies
-                            └── Render Dashboard
+   ↓
+Kiểm tra Firebase Web Config
+   ↓
+Google Sign-In
+   ↓
+Tạo/cập nhật users/{uid}
+   ↓
+Nhận lời mời đang chờ theo email
+   ↓
+Query collectionGroup("members") với uid hiện tại
+   ↓
+Đọc từng workspace hợp lệ
+   ↓
+Chọn workspace gần nhất hoặc workspace đầu tiên
+   ↓
+Bắt đầu listener babies trong workspace
+   ↓
+Render Dashboard
 ```
 
-Frontend ẩn chức năng không phù hợp với role để cải thiện UX. **Firestore Security Rules mới là lớp thực thi quyền truy cập thật sự.**
+Dashboard không hiển thị dữ liệu sức khỏe trước khi membership được xác nhận.
 
-## 3. Mô hình chia sẻ dữ liệu
+### Tương thích dữ liệu MVP cũ
 
-Phiên bản này dùng **shared family workspace**:
+Phiên bản cũ dùng:
 
-- Tất cả document hợp lệ và đang active trong `allowedUsers` được đọc dữ liệu của tất cả em bé.
-- Admin và member đều có thể thêm, sửa, xóa hồ sơ bé và bản ghi theo dõi.
-- Chỉ admin được list, tạo, sửa hoặc xóa `allowedUsers`.
-- Thiết kế path tập trung theo `babies/{babyId}` để sau này có thể thêm `members`, `accessByBaby` hoặc family workspace ID, nhưng MVP chưa triển khai quyền riêng từng bé.
+```text
+allowedUsers/{email}
+babies/{babyId}
+```
 
-## 4. Cấu trúc thư mục
+Phiên bản mới giữ quyền đọc có giới hạn để migration:
+
+- Admin legacy đăng nhập đầu tiên sẽ tạo workspace `family-default`.
+- Member legacy đăng nhập sau sẽ nhận membership trong workspace này.
+- Admin mở **Cài đặt → Chuyển dữ liệu MVP cũ vào workspace**.
+- Migration chỉ sao chép và giữ nguyên document ID; không xóa dữ liệu nguồn.
+
+## 5. Soft delete
+
+### Xóa mềm
+
+Khi người dùng bấm Xóa:
+
+```javascript
+{
+  isDeleted: true,
+  deletedAt: serverTimestamp(),
+  deletedByUid: currentUser.uid,
+  deletedByEmail: currentUser.email,
+  updatedAt: serverTimestamp()
+}
+```
+
+Tất cả query chính có:
+
+```javascript
+where("isDeleted", "==", false)
+```
+
+### Khôi phục
+
+Khôi phục đặt lại:
+
+```javascript
+{
+  isDeleted: false,
+  deletedAt: null,
+  deletedByUid: null,
+  deletedByEmail: null,
+  updatedAt: serverTimestamp()
+}
+```
+
+### Xóa vĩnh viễn
+
+- Chỉ admin.
+- Document phải đang ở trạng thái xóa mềm.
+- Với hồ sơ bé, app đọc từng subcollection bằng pagination, dừng nếu một nhóm vượt 10.000 bản ghi, xóa các document con theo batch, dọn ảnh Storage rồi xóa document cha.
+- Storage cleanup lỗi không làm mất hồ sơ Firestore chưa được purge; lỗi được ghi console để xử lý file mồ côi.
+
+## 6. Phân trang bằng `startAfter`
+
+`js/firestore-service.js` cung cấp:
+
+- `getCollectionPage()` — tải một trang, thêm một document để xác định `hasMore`.
+- `getAllPagesResult()` — đọc tuần tự qua cursor, trả `{ items, truncated, lastDocument }`.
+- `getAllPages()` — wrapper chỉ trả `items`.
+
+Mẫu query:
+
+```javascript
+query(
+  collectionRef,
+  where("isDeleted", "==", false),
+  orderBy("measuredAt", "desc"),
+  startAfter(lastDocument),
+  limit(21)
+)
+```
+
+UI mặc định 20 bản ghi/trang. Ô tìm kiếm text lọc trong trang hiện tại; date/status được đưa vào Firestore query.
+
+## 7. JSON backup schema v2
+
+### Export
+
+```javascript
+{
+  schemaVersion: 2,
+  app: "Baby Tracker",
+  exportedAt: "2026-07-13T...Z",
+  workspace: { id: "...", name: "..." },
+  baby: { ... },
+  collections: {
+    growthRecords: [],
+    vaccinations: [],
+    ...
+  }
+}
+```
+
+Backup chỉ chứa dữ liệu đang hoạt động. File ảnh trong Storage không nằm trong JSON.
+
+### Import
+
+Chỉ menu admin hiển thị nút import và `importBackupAsNewBaby()` tự kiểm tra role lần nữa.
+
+Validation gồm:
+
+- `schemaVersion === 2`.
+- Tối đa 10 MB và 10.000 bản ghi.
+- Chỉ 13 collection được hỗ trợ.
+- Chỉ field được whitelist.
+- ID nguồn phải có và không trùng trong cùng collection.
+- Timestamp/date hợp lệ.
+- Enum hợp lệ.
+- Range số hợp lý.
+- End time không trước start time.
+- URL chỉ `http`/`https`.
+- Liên kết thuốc/nhắc việc được kiểm tra và remap.
+- Firebase Storage URL cũ bị loại bỏ.
+
+Import tạo một hồ sơ mới có hậu tố “(khôi phục)”. Nếu một batch sau bị lỗi, app soft-delete hồ sơ tạm, purge các document đã commit và xóa hồ sơ tạm. Nếu rollback cũng lỗi, UI trả về baby ID để admin kiểm tra Thùng rác.
+
+> Vì ứng dụng không có backend, Security Rules không thể phân biệt “bulk import” với nhiều thao tác CRUD bình thường. Quyền import được kiểm tra ở UI và function; mọi document vẫn phải vượt qua schema/rules như CRUD thông thường.
+
+## 8. Cloud Storage cho ảnh
+
+### Đường dẫn
+
+```text
+workspaces/{workspaceId}/babies/{babyId}/images/avatar/{timestamp-uuid.ext}
+workspaces/{workspaceId}/babies/{babyId}/images/milestones/{recordId}/{timestamp-uuid.ext}
+```
+
+Metadata upload:
+
+```javascript
+{
+  contentType: file.type,
+  customMetadata: {
+    workspaceId,
+    babyId,
+    uploadedByUid
+  }
+}
+```
+
+### Chính sách
+
+- `viewer`: đọc ảnh.
+- `admin/member`: đọc, upload và delete ảnh trong workspace.
+- Tối đa 5 MB.
+- Chỉ `image/jpeg`, `image/png`, `image/webp`, `image/gif`.
+- Không cho update metadata/file tại cùng path; ảnh mới dùng filename mới.
+
+### Lưu ý billing hiện hành
+
+Cloud Storage for Firebase hiện yêu cầu project ở **Blaze plan**. Blaze là pay-as-you-go; vẫn có thể có mức miễn phí tùy location và usage. Hãy bật budget alerts trước khi dùng dữ liệu thật.
+
+Tài liệu chính thức:
+
+- https://firebase.google.com/docs/storage/web/start
+- https://firebase.google.com/docs/storage/faqs-storage-changes-announced-sept-2024
+
+## 9. WHO Growth Standards
+
+File dữ liệu:
+
+```text
+assets/data/who-growth-standards-v1.json
+```
+
+Bao gồm 1.857 dòng LMS cho mỗi tổ hợp:
+
+- Weight-for-age — girls/boys.
+- Length/height-for-age — girls/boys.
+- Head circumference-for-age — girls/boys.
+- Ngày tuổi 0–1.856.
+
+### Cách tính
+
+Trong vùng chuẩn LMS:
+
+```text
+Z = ((X / M)^L - 1) / (L × S), nếu L ≠ 0
+Z = ln(X / M) / S, nếu L = 0
+```
+
+Ngoài ±3 SD, app dùng restricted LMS tail theo khoảng cách giữa 2 SD và 3 SD. Percentile chỉ hiển thị khi `|Z| <= 3`; ngoài vùng này app hiển thị z-score nhưng không chuyển thành percentile để tránh cảm giác chính xác giả.
+
+### Giới hạn diễn giải
+
+- Chỉ áp dụng khi hồ sơ có giới tính `male` hoặc `female`.
+- Dùng tuổi hoàn thành theo ngày, không tự hiệu chỉnh tuổi cho trẻ sinh non.
+- Dưới 24 tháng WHO thường dùng chiều dài nằm; từ 24 tháng dùng chiều cao đứng. App không thể xác minh kỹ thuật đo.
+- Không tự kết luận bệnh lý.
+- WHO standard chỉ là một phần của đánh giá lâm sàng.
+
+Nguồn chính thức:
+
+- https://www.who.int/tools/child-growth-standards/standards
+- https://www.who.int/tools/child-growth-standards/standards/weight-for-age
+- https://www.who.int/tools/child-growth-standards/standards/length-height-for-age
+- https://www.who.int/tools/child-growth-standards/standards/head-circumference-for-age
+- https://www.who.int/tools/child-growth-standards/software
+
+## 10. Cấu trúc thư mục
 
 ```text
 baby-tracker/
 ├── index.html
 ├── README.md
+├── UPDATE-INSTRUCTIONS.md
 ├── firestore.rules
 ├── firestore.indexes.json
+├── storage.rules
+├── firebase.json
 ├── .nojekyll
+├── assets/
+│   ├── data/
+│   │   └── who-growth-standards-v1.json
+│   ├── icons/
+│   └── images/
+│       └── baby-placeholder.svg
 ├── css/
 │   ├── variables.css
 │   ├── reset.css
@@ -107,120 +436,144 @@ baby-tracker/
 │   ├── forms.css
 │   ├── utilities.css
 │   └── responsive.css
-├── js/
-│   ├── firebase-config.js
-│   ├── firebase-service.js
-│   ├── auth.js
-│   ├── authorization.js
-│   ├── app-state.js
-│   ├── router.js
-│   ├── navigation.js
-│   ├── firestore-service.js
-│   ├── ui.js
-│   ├── modal.js
-│   ├── toast.js
-│   ├── validators.js
-│   ├── date-utils.js
-│   ├── export-utils.js
-│   ├── demo-data.js
-│   ├── app.js
-│   └── modules/
-│       ├── module-factory.js
-│       ├── dashboard.js
-│       ├── babies.js
-│       ├── growth.js
-│       ├── vaccinations.js
-│       ├── medical-visits.js
-│       ├── feeding.js
-│       ├── sleep.js
-│       ├── diapers.js
-│       ├── symptoms.js
-│       ├── medications.js
-│       ├── allergies.js
-│       ├── milestones.js
-│       ├── teething.js
-│       ├── reminders.js
-│       ├── reports.js
-│       ├── allowed-users.js
-│       └── settings.js
-└── assets/
-    ├── icons/
-    └── images/
-        └── baby-placeholder.svg
+└── js/
+    ├── app.js
+    ├── app-state.js
+    ├── auth.js
+    ├── authorization.js
+    ├── backup-service.js
+    ├── firebase-config.js
+    ├── firebase-service.js
+    ├── firestore-service.js
+    ├── storage-service.js
+    ├── workspace-service.js
+    ├── migration-service.js
+    ├── who-growth.js
+    └── modules/
+        ├── module-factory.js
+        ├── dashboard.js
+        ├── babies.js
+        ├── growth.js
+        ├── allowed-users.js
+        ├── reports.js
+        └── ...
 ```
 
-## 5. Công nghệ và phiên bản
+## 11. Thiết lập Firebase từ đầu
 
-- HTML5, CSS3, JavaScript ES Modules.
-- Firebase Web SDK modular **12.16.0**, tải từ CDN chính thức `www.gstatic.com`.
-- Chart.js **4.5.1** qua jsDelivr.
-- Lucide UMD qua CDN; ứng dụng vẫn dùng được nếu icon CDN không tải vì navigation có ký hiệu text dự phòng.
-- `Intl.DateTimeFormat` với múi giờ hiển thị `Asia/Ho_Chi_Minh`.
+### Bước 1 — Firebase project và Web App
 
-Tất cả Firebase imports đều khóa cùng phiên bản 12.16.0. Không trộn modular và compat API.
+1. Mở Firebase Console.
+2. Tạo project.
+3. Project Overview → biểu tượng Web.
+4. App nickname: `Baby Tracker Web`.
+5. Không cần Firebase Hosting vì website dùng GitHub Pages.
+6. Sao chép Web Config vào `js/firebase-config.js`.
+7. Kiểm tra `storageBucket` đúng bucket thật của project.
 
-## 6. Firestore data model
+Không thêm service account, private key hoặc Admin SDK credential vào repository.
 
-```text
-allowedUsers/{email}
-babies/{babyId}
-babies/{babyId}/growthRecords/{recordId}
-babies/{babyId}/vaccinations/{recordId}
-babies/{babyId}/medicalVisits/{recordId}
-babies/{babyId}/feedingRecords/{recordId}
-babies/{babyId}/sleepRecords/{recordId}
-babies/{babyId}/diaperRecords/{recordId}
-babies/{babyId}/symptomRecords/{recordId}
-babies/{babyId}/medications/{recordId}
-babies/{babyId}/medicationLogs/{recordId}
-babies/{babyId}/allergies/{recordId}
-babies/{babyId}/milestones/{recordId}
-babies/{babyId}/teethingRecords/{recordId}
-babies/{babyId}/reminders/{recordId}
+### Bước 2 — Google Authentication
+
+1. Build → Authentication → Get started.
+2. Sign-in method/Providers → Google.
+3. Enable.
+4. Chọn support email.
+5. Save.
+6. Settings → Authorized domains.
+7. Thêm `localhost` và `YOUR_USERNAME.github.io`.
+
+Chỉ nhập hostname, không nhập `https://` hoặc `/baby-tracker/`.
+
+### Bước 3 — Firestore
+
+1. Build → Firestore Database → Create database.
+2. Chọn Standard/Firebase-native, không MongoDB compatibility.
+3. Chọn Production mode.
+4. Chọn location phù hợp.
+5. Không cần tạo `allowedUsers` nếu đây là project mới hoàn toàn.
+
+Workspace đầu tiên được tạo từ màn hình Cài đặt sau khi tài khoản có quyền bootstrap. Với project nâng cấp từ phiên bản cũ, giữ `allowedUsers/{email-admin}` để admin legacy khởi tạo `family-default`.
+
+### Bước 4 — Publish Firestore Rules
+
+Cách Console:
+
+1. Firestore Database → Rules.
+2. Dán toàn bộ `firestore.rules`.
+3. Publish.
+
+Cách CLI:
+
+```bash
+firebase login
+firebase use YOUR_PROJECT_ID
+firebase deploy --only firestore:rules
 ```
 
-Mỗi document theo dõi có:
+### Bước 5 — Deploy indexes
 
-```javascript
-{
-  createdByUid: "Firebase Auth UID",
-  createdByEmail: "email@example.com",
-  createdAt: serverTimestamp(),
-  updatedAt: serverTimestamp()
-}
+```bash
+firebase deploy --only firestore:indexes
 ```
 
-Khi update, `firestore-service.js` loại bỏ metadata tạo và chỉ ghi lại `updatedAt`. Rules xác nhận `createdByUid`, `createdByEmail`, `createdAt` không đổi.
+Hoặc tạo từng index qua link lỗi Firebase Console. Chờ trạng thái **Enabled** trước khi test.
 
-## 7. Chạy local
+### Bước 6 — Bật Cloud Storage
 
-Không mở trực tiếp bằng `file:///...` vì ES Modules và Firebase Auth cần HTTP origin.
+1. Nâng project lên Blaze plan và thiết lập budget alerts.
+2. Databases & Storage → Storage → Get started.
+3. Chọn location và tạo default bucket.
+4. Đảm bảo `firebaseConfig.storageBucket` khớp tên bucket.
+5. Storage → Rules → dán `storage.rules` → Publish.
 
-### Cách 1: VS Code Live Server
+CLI:
 
-1. Mở VS Code.
-2. Chọn **File > Open Folder** và chọn thư mục `baby-tracker`.
-3. Mở tab Extensions hoặc nhấn `Ctrl+Shift+X`.
-4. Tìm **Live Server** và cài extension của Ritwick Dey.
-5. Trong Explorer, chuột phải `index.html`.
-6. Chọn **Open with Live Server**.
-7. Trình duyệt thường mở địa chỉ như `http://127.0.0.1:5500` hoặc `http://localhost:5500`.
-8. Trong Firebase Authentication > Settings > Authorized domains, bảo đảm `localhost` đã có. Với `127.0.0.1`, nên truy cập lại bằng `http://localhost:5500` để dùng domain đã cho phép.
+```bash
+firebase deploy --only storage
+```
 
-**Kiểm tra thành công:** trang Baby Tracker xuất hiện; nếu config chưa thay, màn hình “Chưa cấu hình Firebase” xuất hiện thay vì lỗi JavaScript trắng trang.
+Storage Rules dùng Firestore membership. Lần đầu publish rules có `firestore.get()`/`firestore.exists()`, Firebase có thể yêu cầu bật quyền kết nối giữa Storage Rules và default Firestore database.
 
-### Cách 2: Python HTTP Server
+### Bước 7 — Deploy toàn bộ Rules và indexes
 
-Từ terminal tại thư mục `baby-tracker`:
+```bash
+firebase deploy --only firestore:rules,firestore:indexes,storage
+```
+
+`firebase.json` đã trỏ đúng các file.
+
+## 12. Nâng cấp từ repository cũ
+
+Đọc chi tiết trong [UPDATE-INSTRUCTIONS.md](./UPDATE-INSTRUCTIONS.md).
+
+Thứ tự bắt buộc:
+
+1. Backup Firestore hiện tại.
+2. Upload toàn bộ source mới.
+3. Publish Firestore Rules mới.
+4. Deploy indexes mới.
+5. Bật Storage/Blaze và publish Storage Rules nếu dùng upload ảnh.
+6. Admin legacy đăng nhập trước.
+7. Cài đặt → Migration dữ liệu cũ.
+8. So sánh dữ liệu cũ/mới.
+9. Chỉ sau khi xác nhận mới lập kế hoạch xóa dữ liệu global cũ.
+
+## 13. Chạy local
+
+Không mở bằng `file:///` vì ES Modules và `fetch()` WHO dataset cần HTTP server.
+
+### VS Code Live Server
+
+1. Mở folder repository.
+2. Cài Live Server.
+3. Chuột phải `index.html` → Open with Live Server.
+4. Thêm `localhost` vào Authorized Domains.
+
+### Python
 
 ```bash
 python -m http.server 5500
-```
-
-Nếu lệnh `python` không tồn tại trên Windows, thử:
-
-```bash
-py -m http.server 5500
 ```
 
 Mở:
@@ -229,524 +582,174 @@ Mở:
 http://localhost:5500
 ```
 
-Dừng server bằng `Ctrl+C`.
+## 14. GitHub Pages
 
-## 8. Thiết lập Firebase từng bước
+1. Upload nguyên cấu trúc thư mục, không làm phẳng file.
+2. `index.html` nằm ở root.
+3. Repository → Settings → Pages.
+4. Deploy from a branch.
+5. Branch `main`, folder `/(root)`.
+6. Thêm `USERNAME.github.io` vào Firebase Authorized Domains.
+7. `Ctrl + Shift + R` sau deployment.
 
-Giao diện Firebase Console có thể đổi nhẹ theo thời gian, nhưng tên sản phẩm và logic cấu hình vẫn tương tự.
+## 15. Dữ liệu demo
 
-### Bước 1: Tạo Firebase Project
-
-1. Mở Firebase Console và đăng nhập Google.
-2. Ở màn hình project, bấm **Create a project** hoặc **Add project**.
-3. Nhập Project name, ví dụ `baby-tracker-family`.
-4. Firebase đề xuất Project ID. Project name có thể trùng, nhưng Project ID phải duy nhất toàn cầu.
-5. Project ID có thể xuất hiện trong `authDomain`, URL dịch vụ và log; không dùng nội dung bí mật trong Project ID.
-6. Bấm **Continue**.
-7. Google Analytics không bắt buộc cho ứng dụng này. Có thể tắt để setup đơn giản, hoặc bật nếu gia đình thực sự cần analytics và hiểu vấn đề dữ liệu riêng tư.
-8. Bấm **Create project**.
-9. Chờ đến khi có thông báo hoàn tất, bấm **Continue**.
-10. **Kết quả mong đợi:** trang **Project Overview** của project mới xuất hiện.
-
-### Bước 2: Đăng ký Firebase Web App
-
-1. Tại Project Overview, bấm biểu tượng Web `</>`.
-2. App nickname: `Baby Tracker Web`.
-3. Không chọn Firebase Hosting; source sẽ được host trên GitHub Pages.
-4. Bấm **Register app**.
-5. Firebase hiển thị object `firebaseConfig`.
-6. Mở `js/firebase-config.js`.
-7. Thay toàn bộ placeholder:
-
-```javascript
-export const firebaseConfig = {
-  apiKey: "giá-trị-từ-console",
-  authDomain: "project-id.firebaseapp.com",
-  projectId: "project-id",
-  storageBucket: "project-id.firebasestorage.app",
-  messagingSenderId: "...",
-  appId: "..."
-};
-```
-
-8. Không sao chép service account, private key, OAuth client secret hoặc Admin SDK credential.
-9. Lưu file.
-10. **Kiểm tra thành công:** không còn chuỗi `YOUR_` trong `firebase-config.js`; reload local app sẽ chuyển từ màn hình lỗi config sang màn hình đăng nhập.
-
-#### Firebase Web Config có phải bí mật không?
-
-Không. Web config là định danh client được gửi đến trình duyệt. Nó không cấp quyền quản trị. Dữ liệu phải được bảo vệ bằng:
-
-- Firebase Authentication.
-- Firestore Security Rules.
-- Giới hạn danh sách `allowedUsers`.
-- App Check tùy chọn sau khi MVP ổn định.
-
-### Bước 3: Bật Google Authentication
-
-1. Trong Firebase Console, mở **Build > Authentication**; ở giao diện mới có thể nằm trong nhóm **Build** hoặc **Run**.
-2. Nếu chưa dùng Authentication, bấm **Get started**.
-3. Mở tab **Sign-in method** hoặc **Providers**.
-4. Chọn **Google**.
-5. Bật **Enable**.
-6. Chọn Project support email.
-7. Bấm **Save**.
-8. **Kiểm tra thành công:** Google hiển thị trạng thái **Enabled**.
-
-Ứng dụng chỉ gọi `signInWithPopup()` từ click trực tiếp của nút. Email/password không được sử dụng.
-
-### Bước 4: Authorized Domains
-
-1. Mở **Authentication**.
-2. Mở **Settings**.
-3. Tìm **Authorized domains**.
-4. Kiểm tra `localhost`; thêm nếu chưa có.
-5. Sau khi GitHub Pages hoạt động, bấm **Add domain**.
-6. Nhập hostname, ví dụ:
+Admin mở:
 
 ```text
-hieunguyen.github.io
+Cài đặt → Công cụ admin → Tạo/hoàn thiện dữ liệu demo
 ```
 
-Không nhập:
-
-```text
-https://hieunguyen.github.io/baby-tracker/
-```
-
-Không nhập `https://`, dấu `/`, hoặc path repository.
-
-**Kiểm tra thành công:** hostname xuất hiện trong danh sách; đăng nhập Google từ URL GitHub Pages không còn lỗi `auth/unauthorized-domain`.
-
-### Bước 5: Tạo Cloud Firestore
-
-1. Trong Firebase Console, mở **Build > Firestore Database** hoặc **Databases & Storage > Firestore**.
-2. Bấm **Create database**.
-3. Chọn **Firestore Standard edition** / chế độ Firebase Native phù hợp với Web SDK thông thường.
-4. Không chọn chế độ tương thích MongoDB nếu project của bạn có lựa chọn này.
-5. Chọn **Production mode** để mặc định từ chối truy cập cho đến khi rules được publish.
-6. Chọn location gần người dùng và phù hợp với các dịch vụ dự kiến dùng sau này.
-7. Với gia đình ở Việt Nam, xem danh sách location hiện hành trong Console và cân nhắc khu vực châu Á. Không chọn tùy tiện: location mặc định khó hoặc không thể đổi trực tiếp sau khi đã tạo.
-8. Bấm **Enable** hoặc **Create**.
-9. **Kiểm tra thành công:** xuất hiện các tab **Data**, **Rules**, **Indexes**.
-
-### Bước 6: Tạo admin đầu tiên thủ công
-
-Admin đầu tiên không thể tự tạo qua frontend vì chưa có admin nào được Rules cho phép quản lý `allowedUsers`.
-
-1. Mở Firestore Database.
-2. Chọn tab **Data**.
-3. Bấm **Start collection**.
-4. Collection ID: `allowedUsers`.
-5. Bấm **Next**.
-6. Document ID: email Google của admin, viết thường hoàn toàn, ví dụ `admin@gmail.com`.
-7. Không chọn Auto-ID.
-8. Tạo các field:
-
-| Field | Type | Ví dụ |
-|---|---|---|
-| `email` | string | `admin@gmail.com` |
-| `displayName` | string | `Admin` |
-| `role` | string | `admin` |
-| `active` | boolean | `true` |
-| `createdByEmail` | string | `admin@gmail.com` |
-| `createdAt` | timestamp | thời gian hiện tại |
-| `updatedAt` | timestamp | thời gian hiện tại |
-
-9. Bấm **Save**.
-10. Mở lại document và kiểm tra:
-    - ID đúng chính xác với email.
-    - Email không có chữ hoa hoặc khoảng trắng.
-    - `active` là boolean, không phải string `"true"`.
-    - `role` đúng là `admin`.
-
-Lỗi thường gặp:
-
-- Dùng Auto-ID.
-- Collection tên `allowedUser` thay vì `allowedUsers`.
-- Document ID khác field `email`.
-- Email có chữ hoa.
-- `active` sai type.
-- `role` viết `Admin`, `administrator` hoặc giá trị khác.
-
-### Bước 7: Publish Firestore Security Rules
-
-1. Mở file `firestore.rules` trong repository.
-2. Sao chép toàn bộ nội dung, bắt đầu từ `rules_version = '2';`.
-3. Trong Firebase Console mở Firestore Database.
-4. Chọn tab **Rules**.
-5. Xóa rules mặc định.
-6. Dán rules của project.
-7. Bấm **Publish**.
-8. Nếu Console báo lỗi cú pháp, không bỏ các điều kiện bảo mật để “cho chạy”; kiểm tra vị trí lỗi và đảm bảo đã sao chép trọn file.
-9. **Kiểm tra thành công:** Console hiển thị thời điểm publish mới và không có lỗi.
-
-Không dùng:
-
-```javascript
-allow read, write: if true;
-```
-
-Không dùng rule rộng chỉ kiểm tra `request.auth != null` cho toàn bộ database.
-
-#### Rules không phải bộ lọc
-
-Query phải có khả năng chứng minh toàn bộ kết quả đều được Rules cho phép. Rules không nhận một query rộng rồi tự loại document không được phép. Trong MVP, toàn bộ active users dùng chung workspace nên các query trên `babies` và subcollections phù hợp với `isAllowed()`.
-
-### Bước 8: Kiểm thử Rules
-
-Rules Playground có thể thay đổi vị trí trong Console. Nếu có:
-
-1. Mở Firestore > Rules.
-2. Chọn **Rules Playground** / **Simulator**.
-3. Chọn operation và path.
-4. Với authenticated request, nhập UID và email token phù hợp.
-5. Chạy các case:
-
-| Case | Kết quả mong đợi |
-|---|---|
-| Không đăng nhập đọc `babies/x` | Deny |
-| Member active đọc `babies/x` | Allow |
-| Member get chính `allowedUsers/member@gmail.com` | Allow |
-| Member list `allowedUsers` | Deny |
-| Admin list `allowedUsers` | Allow |
-| Member tạo allowed user | Deny |
-| Admin xóa chính document email của mình | Deny |
-| Admin đổi role chính mình thành member | Deny |
-| Admin đặt active chính mình false | Deny |
-| User active false đọc dữ liệu bé | Deny |
-
-Nếu Playground không mô phỏng thuận tiện `exists/get`, dùng Firebase Emulator Suite trong một nhánh phát triển sau này. Repository MVP không bắt buộc Node.js để chạy web, nhưng Emulator CLI là công cụ kiểm thử nâng cao riêng.
-
-### Bước 9: Đăng nhập admin và tạo member
-
-1. Chạy local app bằng HTTP server.
-2. Bấm **Đăng nhập bằng Google**.
-3. Chọn đúng tài khoản admin đã thêm trong `allowedUsers`.
-4. Mở **Người dùng** trong sidebar desktop hoặc **Cài đặt > Quản lý người dùng** trên mobile.
-5. Bấm **Thêm người dùng**.
-6. Nhập email member.
-7. Chọn role `Member`.
-8. Giữ active bật.
-9. Lưu.
-10. Đăng xuất admin.
-11. Đăng nhập member.
-12. **Kiểm tra:** member không thấy trang Người dùng nhưng vẫn thao tác được dữ liệu bé.
-
-Nếu UI quản trị chưa hoạt động, tạo member thủ công giống Bước 6 nhưng đặt `role = member` và `createdByEmail` là email admin.
-
-### Bước 10: Firestore Indexes
-
-`firestore.indexes.json` hiện để danh sách composite index rỗng. Ứng dụng ưu tiên query một `orderBy` và filter nhỏ ở client nên chỉ dùng single-field indexes mặc định.
-
-Khi xuất hiện lỗi thiếu index:
-
-1. Mở DevTools bằng `F12`.
-2. Chọn Console.
-3. Tìm lỗi Firestore có link tạo index.
-4. Mở link.
-5. Kiểm tra collection/subcollection, fields và sort direction.
-6. Bấm **Create index**.
-7. Mở Firestore > Indexes.
-8. Chờ trạng thái **Building** chuyển thành **Enabled**.
-9. Reload app.
-
-Không tạo hàng loạt index không sử dụng vì tăng thời gian quản lý và có thể ảnh hưởng chi phí ghi.
-
-### Bước 11: Kiểm tra dữ liệu
-
-1. Trong ứng dụng tạo một hồ sơ em bé.
-2. Mở Firestore > Data.
-3. Mở collection `babies`.
-4. Kiểm tra document có `createdByUid`, `createdByEmail`, `createdAt`, `updatedAt`.
-5. Trong app thêm một bản ghi tăng trưởng.
-6. Trong Console mở document bé > subcollection `growthRecords`.
-7. Kiểm tra field số đúng type number và thời gian đúng type timestamp.
-8. Sửa bản ghi trong app.
-9. Kiểm tra `createdAt` không đổi, `updatedAt` thay đổi.
-
-### Bước 12: App Check tùy chọn nâng cao
-
-Chỉ triển khai sau khi Authentication, Firestore và Rules đã ổn định.
-
-1. Trong Firebase Console mở **Security > App Check**.
-2. Chọn Web App đã đăng ký.
-3. Với tích hợp mới, ưu tiên **reCAPTCHA Enterprise** theo khuyến nghị Firebase hiện hành.
-4. Đăng ký domain GitHub Pages đúng hostname.
-5. Thêm import `firebase-app-check.js` cùng phiên bản 12.16.0.
-6. Khởi tạo App Check ngay sau `initializeApp()` và trước khi gọi Firestore.
-7. Deploy ở chế độ chưa enforcement.
-8. Theo dõi metrics request hợp lệ/không hợp lệ.
-9. Chỉ bật enforcement sau khi local, GitHub Pages, các trình duyệt chính và tài khoản thật đều hoạt động.
-10. Với localhost, dùng App Check debug provider; không đưa debug token vào repository.
-11. Không thêm `localhost` vào allowlist reCAPTCHA chỉ để né debug provider.
-
-App Check bổ sung bảo vệ abuse, không thay thế Authentication hoặc Security Rules.
-
-## 9. Triển khai GitHub Pages
-
-### Bước 1: Tạo repository
-
-1. Đăng nhập GitHub.
-2. Bấm **New repository**.
-3. Repository name: `baby-tracker`.
-4. Chọn Public hoặc Private tùy gói GitHub và quyền Pages hiện hành của tài khoản.
-5. Không thêm service account, private key hoặc file credential bí mật.
-6. Tạo repository.
-
-### Bước 2: Upload source
-
-Upload toàn bộ nội dung bên trong thư mục `baby-tracker`, bảo đảm có:
-
-```text
-index.html
-css/
-js/
-assets/
-README.md
-firestore.rules
-firestore.indexes.json
-.nojekyll
-```
-
-`index.html` phải ở root của publishing source.
-
-### Bước 3: Kiểm tra relative paths
-
-Đúng:
-
-```html
-<link rel="stylesheet" href="./css/base.css">
-<script type="module" src="./js/app.js"></script>
-```
-
-Đúng trong JavaScript:
-
-```javascript
-import { showToast } from "./toast.js";
-import { renderRecordModule } from "./module-factory.js";
-```
-
-Không dùng path bắt đầu bằng `/` như `/js/app.js`, vì project site chạy dưới `/baby-tracker/`.
-
-### Bước 4: Bật Pages
-
-1. Mở repository.
-2. Chọn **Settings**.
-3. Trong sidebar chọn **Pages**.
-4. Phần **Build and deployment**, Source chọn **Deploy from a branch**.
-5. Branch chọn `main`.
-6. Folder chọn `/(root)`.
-7. Bấm **Save**.
-8. Mở tab **Actions** hoặc quay lại Pages để theo dõi deployment.
-9. Khi thành công, GitHub hiển thị URL dạng:
-
-```text
-https://YOUR_USERNAME.github.io/baby-tracker/
-```
-
-File `.nojekyll` vô hiệu xử lý Jekyll không cần thiết cho static app này.
-
-### Bước 5: Thêm domain Pages vào Firebase
-
-1. Sao chép hostname từ URL, ví dụ `YOUR_USERNAME.github.io`.
-2. Firebase Console > Authentication > Settings > Authorized domains.
-3. Bấm **Add domain**.
-4. Dán hostname, không có protocol/path.
-5. Lưu.
-6. Reload GitHub Pages.
-7. Test Google Sign-In.
-
-### Bước 6: Checklist deployment
-
-- [ ] CSS tải, không có trang trắng.
-- [ ] Không có 404 cho `js/app.js` hoặc module con.
-- [ ] Firebase config đã thay placeholder.
-- [ ] Google popup mở từ click.
-- [ ] Domain đã authorized.
-- [ ] Tài khoản không trong allowedUsers bị sign out.
-- [ ] Dashboard chỉ xuất hiện sau khi kiểm tra quyền.
-- [ ] Firestore đọc/ghi thành công.
-- [ ] Member không thấy trang Người dùng.
-- [ ] Rules vẫn chặn member nếu cố gọi trực tiếp.
-- [ ] Dark mode hoạt động.
-- [ ] Layout usable trên điện thoại.
-
-## 10. Xử lý lỗi thường gặp
-
-| Lỗi | Nguyên nhân thường gặp | Cách sửa |
-|---|---|---|
-| `auth/unauthorized-domain` | Chưa thêm GitHub Pages hostname; nhập cả URL/path | Thêm đúng `username.github.io` trong Authentication > Authorized domains |
-| `auth/popup-blocked` | Popup không từ click trực tiếp; trình duyệt chặn | Cho phép popup; giữ lời gọi `signInWithPopup()` trực tiếp trong click handler |
-| `auth/popup-closed-by-user` | Người dùng đóng popup | Không cần sửa hệ thống; bấm đăng nhập lại |
-| `auth/operation-not-allowed` | Google provider chưa bật | Authentication > Sign-in method > Google > Enable |
-| `permission-denied` | Email/ID sai, inactive, role sai, Rules chưa publish | Kiểm tra `allowedUsers/{email-lowercase}`, type fields và Rules |
-| `Failed to resolve module specifier` | Sai `./` hoặc `../`; mở bằng `file://` | Sửa import và chạy HTTP server |
-| 404 trên GitHub Pages | Path bắt đầu `/`; sai hoa/thường; Pages publish sai branch | Dùng relative path; kiểm tra file/branch/root |
-| Firebase config invalid | Còn `YOUR_`; copy sai app config | Copy lại Web App config vào `js/firebase-config.js` |
-| Missing index | Query cần composite index | Mở link lỗi, tạo index, chờ Enabled |
-| Dashboard không có dữ liệu | Chưa chọn bé hoặc document thiếu field orderBy | Chọn bé; kiểm tra field timestamp bắt buộc |
-| App đăng nhập rồi thoát ngay | allowed user không tồn tại/inactive/role sai | Sửa document ID và fields trong Firestore |
-
-## 11. Backup và export
-
-1. Chọn em bé.
-2. Mở **Báo cáo & xuất dữ liệu**.
-3. Bấm **Tải backup JSON** để tải hồ sơ và tối đa 1.000 record mỗi subcollection.
-4. Bấm từng module CSV để mở trong Excel. CSV có UTF-8 BOM và escape dấu phẩy, dấu nháy, xuống dòng.
-5. Bấm **In tóm tắt đi khám** và chọn Save as PDF nếu muốn lưu bản in.
-
-### Nhập lịch tiêm phòng từ CSV
-
-1. Mở màn hình **Tiêm phòng**.
-2. Chọn **Tải CSV mẫu** để lấy file có đúng tên và thứ tự cột.
-3. Mở file bằng Excel hoặc Google Sheets và nhập dữ liệu. Các cột bắt buộc gồm `Tên vaccine`, `Mũi số`, `Ngày dự kiến`, `Trạng thái`.
-4. Ngày giờ nên dùng định dạng `dd/mm/yyyy HH:mm`, ví dụ `13/07/2026 09:30`.
-5. Trạng thái có thể dùng tiếng Việt: `Đã lên lịch`, `Sắp đến hạn`, `Đã tiêm`, `Quá hạn`, `Đã hủy`; ứng dụng cũng chấp nhận các mã `scheduled`, `upcoming`, `completed`, `overdue`, `cancelled`.
-6. Lưu dưới dạng CSV UTF-8, quay lại ứng dụng và chọn **Nhập CSV**.
-7. Kiểm tra bảng xem trước. Dòng sai định dạng hoặc trùng `Tên vaccine + Mũi số + Ngày dự kiến` sẽ bị bỏ qua.
-8. Chọn **Nhập ... mũi tiêm** để ghi các dòng hợp lệ vào Firestore bằng batch write.
-
-Mỗi lần nhập tối đa 400 dòng và file không được lớn hơn 2 MB.
-
-Tên file có timestamp ngày, ví dụ:
-
-```text
-baby-tracker-growthRecords-2026-07-13.csv
-baby-tracker-backup-2026-07-13.json
-```
-
-Đây là export phía browser, không phải backup tự động cấp hạ tầng. Với dữ liệu quan trọng, duy trì lịch backup định kỳ và kiểm tra file có mở được.
-
-## 12. Checklist kiểm thử
-
-### Authentication
-
-- [ ] Google đăng nhập thành công.
-- [ ] Popup bị đóng hiển thị thông báo nhẹ.
-- [ ] Popup bị chặn hiển thị hướng dẫn.
-- [ ] Domain chưa cho phép hiển thị lỗi tiếng Việt.
-- [ ] Đăng xuất xóa dữ liệu cũ khỏi UI.
-- [ ] Reload vẫn giữ phiên bằng browser local persistence.
-- [ ] User không được phép bị sign out trước khi Dashboard render.
-- [ ] User `active == false` bị từ chối.
-
-### Authorization
-
-- [ ] Admin thấy trang Người dùng.
-- [ ] Member không thấy trang Người dùng.
-- [ ] Member nhập trực tiếp `#/users` bị chuyển về Dashboard.
-- [ ] Rules từ chối member list/create/update/delete allowedUsers.
-- [ ] Admin không thể tự xóa.
-- [ ] Admin không thể tự khóa.
-- [ ] Admin không thể tự đổi role xuống member.
-
-### CRUD
-
-Với từng module, test:
-
-- [ ] Thêm record hợp lệ.
-- [ ] Form thiếu field bắt buộc bị chặn.
-- [ ] Sửa record giữ nguyên metadata tạo.
-- [ ] Xóa có confirm.
-- [ ] Loading/empty/error state.
-- [ ] Đổi bé không còn listener/data của bé cũ.
-- [ ] Lọc ngày và tìm kiếm.
-- [ ] CSV đúng tiếng Việt.
-
-### Dữ liệu đặc biệt
-
-- [ ] Ngày sinh tương lai bị chặn.
-- [ ] Cân nặng/chiều cao/vòng đầu <= 0 bị chặn.
-- [ ] Nhiệt độ ngoài 30–45°C bị chặn ở form.
-- [ ] Lượng sữa âm bị chặn.
-- [ ] Kết thúc ngủ trước bắt đầu bị chặn.
-- [ ] Kết thúc thuốc trước bắt đầu bị chặn.
-- [ ] URL không phải HTTP/HTTPS bị chặn.
-- [ ] Text dài bị giới hạn.
-- [ ] Dữ liệu nhập chứa HTML/script chỉ hiển thị như text.
-
-### UI/Accessibility
-
-- [ ] Mobile 360px.
-- [ ] Tablet.
-- [ ] Desktop.
-- [ ] Dark mode.
-- [ ] Tab keyboard đi qua nút/input hợp lý.
-- [ ] Escape đóng modal.
-- [ ] Focus không thoát modal khi nhấn Tab.
-- [ ] Focus-visible rõ.
-- [ ] Reduced motion được tôn trọng.
-- [ ] Trạng thái không chỉ truyền bằng màu.
-
-## 13. Checklist bảo mật
-
-- [ ] Firestore không ở test mode.
-- [ ] Rules đã publish và test.
-- [ ] Không commit service account/private key/client secret/debug token.
-- [ ] Không dùng Admin SDK trong browser.
-- [ ] Không có public signup.
-- [ ] Document ID allowedUsers là email lowercase.
-- [ ] Chỉ admin quản lý allowedUsers.
-- [ ] Member bị Rules chặn, không chỉ ẩn nút.
-- [ ] Không lưu hồ sơ y tế trong localStorage.
-- [ ] Chỉ lưu selected baby ID và theme trong localStorage.
-- [ ] Không ghi nội dung sức khỏe vào console; chỉ log object lỗi kỹ thuật.
-- [ ] Giới hạn người được cấp quyền.
-- [ ] Xóa quyền ngay khi người không còn cần truy cập.
-- [ ] Backup định kỳ.
-- [ ] Cân nhắc App Check sau khi MVP ổn định.
-- [ ] Đánh giá nghĩa vụ pháp lý/quyền riêng tư phù hợp nơi sử dụng.
-
-## 14. Dữ liệu demo
-
-Chỉ admin thấy nút **Tạo dữ liệu demo** trong Cài đặt.
-
-- Không tự động ghi.
-- Hiển thị confirm trước khi tạo.
-- Dùng batch write cho hồ sơ và record.
-- Hồ sơ demo chứa marker `[BABY_TRACKER_DEMO_V1]` để UI tránh tạo trùng.
-- Nội dung vaccine/thuốc demo chỉ minh họa, không phải lịch hoặc liều khuyến nghị.
-
-## 15. Giới hạn của phiên bản static
-
-- Không có server chạy nền.
-- Reminder chỉ xuất hiện khi người dùng mở website.
-- Không có push notification thật khi website đóng.
-- Timer chỉ được giữ trong bộ nhớ của tab/module; rời module hoặc reload sẽ dừng timer chưa lưu.
-- Không upload file; ảnh/chứng từ chỉ lưu URL.
-- Không có cascade delete server-side. UI chỉ cho xóa hồ sơ bé khi không tìm thấy record con trong các subcollection đã biết.
-- Backup browser giới hạn 1.000 record mỗi module trong một lần tải.
-- Shared workspace chưa có quyền riêng theo từng bé.
-- Chưa tích hợp chuẩn tăng trưởng WHO; ứng dụng không tự diễn giải chỉ số.
-- Không có audit log bất biến; metadata chỉ cho biết người tạo và thời gian cập nhật gần nhất.
-- Google popup có thể kém thuận tiện trên một số mobile browser; đặc tả MVP yêu cầu popup nên app chưa chuyển sang redirect.
-
-## 16. Hướng nâng cấp
-
-1. App Check với reCAPTCHA Enterprise, theo dõi metrics trước enforcement.
-2. Family workspace ID và membership riêng, thay vì collection global.
-3. Quyền read/write theo từng em bé.
-4. Audit log append-only.
-5. Soft delete và quy trình khôi phục.
-6. Cloud Functions/Cloud Run cho reminder server-side và cascade deletion, nếu chấp nhận có backend.
-7. Firebase Storage hoặc dịch vụ file riêng với Rules chặt chẽ.
-8. PWA/offline strategy được kiểm thử kỹ.
-9. Phân trang thực sự bằng `startAfter` cho bộ dữ liệu lớn.
-10. Import JSON backup có validate schema.
-11. WHO growth standard chỉ sau khi chọn nguồn chính thức, version hóa dataset và kiểm chứng cách tính.
-12. Test tự động bằng Firebase Emulator Suite và browser E2E.
-13. Content Security Policy phù hợp với CDN hoặc self-host dependencies.
-14. Consent, retention policy, access review và quy trình xóa dữ liệu theo yêu cầu.
-
-## 17. Nguồn tài liệu chính thức
-
-- Firebase Web setup: `https://firebase.google.com/docs/web/setup`
-- Firebase CDN alternatives: `https://firebase.google.com/docs/web/alt-setup`
-- Google Sign-In: `https://firebase.google.com/docs/auth/web/google-signin`
-- Firestore quickstart: `https://firebase.google.com/docs/firestore/quickstart`
-- Firestore Rules conditions: `https://firebase.google.com/docs/firestore/security/rules-conditions`
-- App Check Web: `https://firebase.google.com/docs/app-check/web/recaptcha-provider`
-- App Check debug provider: `https://firebase.google.com/docs/app-check/web/debug-provider`
-- GitHub Pages publishing source: `https://docs.github.com/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site`
-- Chart.js docs: `https://www.chartjs.org/docs/latest/`
+Ứng dụng tạo:
+
+- Hồ sơ demo cơ bản.
+- Hồ sơ demo đầy đủ với tất cả 13 subcollection.
+- Không tạo lại hồ sơ đã có marker demo.
+- Batch demo hiện dưới 450 thao tác nên commit atomically.
+
+## 16. Kiểm thử
+
+### Authentication và workspace
+
+- [ ] User không có membership bị sign out.
+- [ ] Invite đúng email được claim.
+- [ ] Một user chuyển được giữa nhiều workspace.
+- [ ] Dữ liệu workspace A không xuất hiện ở workspace B.
+- [ ] Viewer không thể ghi bằng UI và Rules.
+- [ ] Member không quản lý membership.
+- [ ] Admin không tự khóa/hạ role.
+- [ ] Owner không bị khóa/hạ role/xóa membership.
+
+### Soft delete
+
+- [ ] Xóa chuyển bản ghi vào Thùng rác.
+- [ ] Query chính không thấy bản ghi đã xóa.
+- [ ] Khôi phục trả bản ghi về danh sách.
+- [ ] Member không thấy nút xóa vĩnh viễn.
+- [ ] Rules từ chối hard delete document chưa soft-delete.
+- [ ] Purge hồ sơ xóa subcollections và ảnh.
+
+### Storage
+
+- [ ] JPG/PNG/WebP/GIF dưới 5 MB upload được.
+- [ ] PDF hoặc file >5 MB bị từ chối ở client và Rules.
+- [ ] Viewer chỉ đọc.
+- [ ] User workspace khác không đọc ảnh.
+- [ ] Thay ảnh dọn ảnh cũ.
+- [ ] Lỗi Firestore sau upload dọn ảnh mới.
+
+### Pagination
+
+- [ ] Trang 1/2 không lặp document.
+- [ ] Trang trước dùng cache trang đã tải.
+- [ ] Đổi date/status reset cursor.
+- [ ] Thùng rác có cursor riêng.
+- [ ] Backup đọc đủ nhiều trang.
+
+### Backup/import
+
+- [ ] JSON v2 hợp lệ import thành hồ sơ mới.
+- [ ] Schema khác v2 bị từ chối.
+- [ ] Field/collection lạ không được ghi.
+- [ ] ID nguồn trùng bị từ chối.
+- [ ] Ngày 31/02 bị từ chối.
+- [ ] Member/viewer không thấy và không chạy được import function.
+- [ ] Liên kết medication log/reminder được remap.
+- [ ] Giả lập lỗi batch sau và kiểm tra rollback.
+
+### WHO
+
+- [ ] Median LMS cho z-score gần 0.
+- [ ] Nam/nữ dùng đúng bảng.
+- [ ] Tuổi ngoài 0–1.856 ngày không tính.
+- [ ] Hồ sơ `other` không tính.
+- [ ] Không hiển thị percentile ngoài ±3 SD.
+- [ ] Chart không tăng chiều cao/re-render vô hạn.
+
+## 17. Kiểm tra mã nguồn đã chạy
+
+Trong quá trình tạo bản này đã thực hiện:
+
+- `node --check` cho toàn bộ 40 file JavaScript.
+- Kiểm tra tất cả relative imports tồn tại.
+- Xác nhận mọi Firebase import dùng duy nhất SDK 12.16.0.
+- Bundle smoke test bằng esbuild.
+- JSON validation cho indexes và WHO dataset.
+- Test round-trip LMS/z-score và integrity 6 × 1.857 dòng WHO.
+- Test backup schema với payload hợp lệ, ngày sai, ID trùng, field lạ và dangling reference.
+- Parse/lint `firestore.rules` và `storage.rules` bằng parser chính thức trong `@firebase/eslint-plugin-security-rules`.
+
+Rules vẫn nên được test bằng Firebase Emulator Suite hoặc Rules Playground trên project của bạn trước khi dùng dữ liệu thật.
+
+## 18. Bảo mật và giới hạn
+
+- GitHub Pages là static hosting; source JavaScript có thể được xem.
+- Firebase Web Config không phải private key.
+- Firestore Rules và Storage Rules là lớp bảo vệ server-side chính.
+- App không mã hóa field-level ngoài mã hóa mặc định của dịch vụ Firebase.
+- Download URL của Storage là bearer URL dài; không chia sẻ URL ra ngoài. Rules bảo vệ SDK read, nhưng người có download token URL có thể truy cập file cho đến khi token bị thu hồi/thay đổi.
+- Import JSON không chứa file ảnh.
+- Xóa vĩnh viễn không thể khôi phục nếu không có backup.
+- WHO không xử lý hiệu chỉnh tuổi sinh non hoặc xác minh cách đo.
+- Reminder vẫn chỉ hiển thị khi website được mở; không có server-side push notification.
+- Dữ liệu sức khỏe trẻ em là dữ liệu nhạy cảm: giới hạn membership, review quyền định kỳ và backup an toàn.
+
+## 19. Lỗi thường gặp
+
+### `permission-denied`
+
+Kiểm tra:
+
+- Membership document đúng UID.
+- `active == true`.
+- Role hợp lệ.
+- Workspace `active == true`.
+- Rules mới đã publish.
+- Query có `isDeleted` và index tương ứng.
+
+### `failed-precondition` / missing index
+
+- Mở link Firebase trong console.
+- Hoặc deploy `firestore.indexes.json`.
+- Chờ index Enabled.
+
+### Storage 402/403
+
+- Project chưa ở Blaze plan.
+- Bucket chưa được tạo.
+- `storageBucket` sai.
+- Storage Rules chưa publish.
+- Membership không hợp lệ.
+
+### Ảnh upload được nhưng hồ sơ không lưu
+
+Ứng dụng cố dọn file vừa upload. Kiểm tra console nếu cleanup cũng thất bại, sau đó xóa file mồ côi trong Storage Console.
+
+### WHO dataset 404
+
+- Kiểm tra `assets/data/who-growth-standards-v1.json` đã upload.
+- Không mở app bằng `file:///`.
+- Kiểm tra GitHub phân biệt chữ hoa/chữ thường.
+
+### Migration không thấy dữ liệu cũ
+
+- Tài khoản admin cần còn trong `allowedUsers/{email}` legacy.
+- Rules phải giữ block legacy read-only.
+- Dữ liệu cũ phải nằm ở root `babies/{babyId}`.
+
+## 20. Nguồn chính thức
+
+Firebase:
+
+- Query cursors: https://firebase.google.com/docs/firestore/query-data/query-cursors
+- Storage web: https://firebase.google.com/docs/storage/web/start
+- Upload files: https://firebase.google.com/docs/storage/web/upload-files
+- Storage Rules conditions: https://firebase.google.com/docs/storage/security/rules-conditions
+
+WHO:
+
+- Child Growth Standards: https://www.who.int/tools/child-growth-standards/standards
+- Weight-for-age: https://www.who.int/tools/child-growth-standards/standards/weight-for-age
+- Length/height-for-age: https://www.who.int/tools/child-growth-standards/standards/length-height-for-age
+- Head circumference-for-age: https://www.who.int/tools/child-growth-standards/standards/head-circumference-for-age
+- WHO software/methodology: https://www.who.int/tools/child-growth-standards/software

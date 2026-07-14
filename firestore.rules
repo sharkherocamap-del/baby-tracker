@@ -13,19 +13,48 @@ service cloud.firestore {
       return request.auth.token.email.lower();
     }
 
-    function allowedUserPath() {
+    function workspacePath(workspaceId) {
+      return /databases/$(database)/documents/workspaces/$(workspaceId);
+    }
+
+    function membershipPath(workspaceId) {
+      return /databases/$(database)/documents/workspaces/$(workspaceId)/members/$(request.auth.uid);
+    }
+
+    function legacyAllowedPath() {
       return /databases/$(database)/documents/allowedUsers/$(userEmail());
     }
 
-    function isAllowed() {
-      return hasEmail()
-        && exists(allowedUserPath())
-        && get(allowedUserPath()).data.active == true
-        && get(allowedUserPath()).data.role in ['admin', 'member'];
+    function invitationPath(workspaceId) {
+      return /databases/$(database)/documents/workspaceInvites/$(userEmail())/memberships/$(workspaceId);
     }
 
-    function isAdmin() {
-      return isAllowed() && get(allowedUserPath()).data.role == 'admin';
+    function isLegacyAllowed() {
+      return hasEmail()
+        && exists(legacyAllowedPath())
+        && get(legacyAllowedPath()).data.active == true
+        && get(legacyAllowedPath()).data.role in ['admin', 'member'];
+    }
+
+    function isLegacyAdmin() {
+      return isLegacyAllowed() && get(legacyAllowedPath()).data.role == 'admin';
+    }
+
+    function isWorkspaceMember(workspaceId) {
+      return isSignedIn()
+        && exists(membershipPath(workspaceId))
+        && get(membershipPath(workspaceId)).data.active == true
+        && get(membershipPath(workspaceId)).data.role in ['admin', 'member', 'viewer'];
+    }
+
+    function canWriteWorkspace(workspaceId) {
+      return isWorkspaceMember(workspaceId)
+        && get(membershipPath(workspaceId)).data.role in ['admin', 'member'];
+    }
+
+    function isWorkspaceAdmin(workspaceId) {
+      return isWorkspaceMember(workspaceId)
+        && get(membershipPath(workspaceId)).data.role == 'admin';
     }
 
     function isOptionalString(data, field, maxLength) {
@@ -41,31 +70,612 @@ service cloud.firestore {
       return data.get(field, null) == null || data.get(field, null) is timestamp;
     }
 
-    function isOptionalBool(data, field) {
-      return data.get(field, null) == null || data.get(field, null) is bool;
-    }
-
-    function validCreateMetadata() {
+    function validSoftCreateMetadata() {
       return request.resource.data.createdByUid == request.auth.uid
         && request.resource.data.createdByEmail == userEmail()
         && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time;
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.isDeleted == false
+        && request.resource.data.deletedAt == null
+        && request.resource.data.deletedByUid == null
+        && request.resource.data.deletedByEmail == null;
     }
 
-    function validUpdateMetadata() {
-      return request.resource.data.createdByUid == resource.data.createdByUid
+    function validSoftUpdateMetadata() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return after.createdByUid == before.createdByUid
+        && after.createdByEmail == before.createdByEmail
+        && after.createdAt == before.createdAt
+        && after.updatedAt == request.time
+        && (
+          (after.isDeleted == before.isDeleted
+            && after.deletedAt == before.deletedAt
+            && after.deletedByUid == before.deletedByUid
+            && after.deletedByEmail == before.deletedByEmail)
+          || (before.isDeleted == false
+            && after.isDeleted == true
+            && after.deletedAt == request.time
+            && after.deletedByUid == request.auth.uid
+            && after.deletedByEmail == userEmail())
+          || (before.isDeleted == true
+            && after.isDeleted == false
+            && after.deletedAt == null
+            && after.deletedByUid == null
+            && after.deletedByEmail == null)
+        );
+    }
+
+    function babyPath(workspaceId, babyId) {
+      return /databases/$(database)/documents/workspaces/$(workspaceId)/babies/$(babyId);
+    }
+
+    function validHardDelete(workspaceId) {
+      return isWorkspaceAdmin(workspaceId) && resource.data.isDeleted == true;
+    }
+
+    function validChildHardDelete(workspaceId, babyId) {
+      return isWorkspaceAdmin(workspaceId)
+        && (resource.data.isDeleted == true
+          || (exists(babyPath(workspaceId, babyId))
+            && get(babyPath(workspaceId, babyId)).data.isDeleted == true));
+    }
+
+    function validUserProfile(uid) {
+      let data = request.resource.data;
+      return data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'active', 'createdAt', 'updatedAt'])
+        && data.keys().hasAll(['uid', 'email', 'displayName', 'photoURL', 'active', 'createdAt', 'updatedAt'])
+        && data.uid == uid
+        && data.email == userEmail()
+        && data.displayName is string && data.displayName.size() <= 160
+        && data.photoURL is string && data.photoURL.size() <= 1000
+        && data.active is bool;
+    }
+
+    match /users/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow list: if false;
+      allow create: if isSignedIn()
+        && request.auth.uid == uid
+        && validUserProfile(uid)
+        && request.resource.data.active == true
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isSignedIn()
+        && request.auth.uid == uid
+        && validUserProfile(uid)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.active == resource.data.active
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    function validWorkspace(workspaceId) {
+      let data = request.resource.data;
+      return data.keys().hasOnly([
+          'name', 'slug', 'active', 'ownerUid', 'createdByUid', 'createdByEmail',
+          'createdAt', 'updatedAt', 'legacyMigrationStatus', 'legacyMigratedAt',
+          'legacyMigratedBabyCount', 'legacyMigratedRecordCount'
+        ])
+        && data.keys().hasAll([
+          'name', 'slug', 'active', 'ownerUid', 'createdByUid', 'createdByEmail',
+          'createdAt', 'updatedAt', 'legacyMigrationStatus'
+        ])
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 120
+        && data.slug is string && data.slug.size() > 0 && data.slug.size() <= 60
+        && data.active is bool
+        && data.ownerUid is string && data.ownerUid.size() > 0
+        && data.createdByUid is string
+        && data.createdByEmail is string
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.legacyMigrationStatus in ['pending', 'completed', 'not-applicable']
+        && isOptionalTimestamp(data, 'legacyMigratedAt')
+        && isOptionalNumber(data, 'legacyMigratedBabyCount')
+        && isOptionalNumber(data, 'legacyMigratedRecordCount');
+    }
+
+    match /workspaces/{workspaceId} {
+      allow get, list: if isWorkspaceMember(workspaceId);
+      allow create: if hasEmail()
+        && validWorkspace(workspaceId)
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.createdByEmail == userEmail()
+        && request.resource.data.active == true
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isWorkspaceAdmin(workspaceId)
+        && validWorkspace(workspaceId)
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.createdByUid == resource.data.createdByUid
         && request.resource.data.createdByEmail == resource.data.createdByEmail
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+
+      match /members/{uid} {
+        function validMembership() {
+          let data = request.resource.data;
+          return data.keys().hasOnly([
+              'uid', 'email', 'displayName', 'role', 'active', 'invitedByUid',
+              'invitedByEmail', 'joinedAt', 'createdAt', 'updatedAt'
+            ])
+            && data.keys().hasAll([
+              'uid', 'email', 'displayName', 'role', 'active', 'invitedByUid',
+              'invitedByEmail', 'joinedAt', 'createdAt', 'updatedAt'
+            ])
+            && data.uid == uid
+            && data.email is string && data.email == data.email.lower()
+            && data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 160
+            && data.role in ['admin', 'member', 'viewer']
+            && data.active is bool
+            && data.invitedByUid is string
+            && data.invitedByEmail is string
+            && data.joinedAt is timestamp
+            && data.createdAt is timestamp
+            && data.updatedAt is timestamp;
+        }
+
+        function ownerBootstrap() {
+          return uid == request.auth.uid
+            && request.resource.data.email == userEmail()
+            && request.resource.data.role == 'admin'
+            && getAfter(workspacePath(workspaceId)).data.ownerUid == request.auth.uid;
+        }
+
+        function invitedClaim() {
+          return uid == request.auth.uid
+            && request.resource.data.email == userEmail()
+            && exists(invitationPath(workspaceId))
+            && get(invitationPath(workspaceId)).data.active == true
+            && get(invitationPath(workspaceId)).data.status == 'pending'
+            && request.resource.data.role == get(invitationPath(workspaceId)).data.role;
+        }
+
+        function legacyClaim() {
+          return workspaceId == 'family-default'
+            && uid == request.auth.uid
+            && isLegacyAllowed()
+            && request.resource.data.email == userEmail()
+            && request.resource.data.role == get(legacyAllowedPath()).data.role;
+        }
+
+        allow get, list: if isSignedIn() && (uid == request.auth.uid || isWorkspaceMember(workspaceId));
+        allow create: if hasEmail()
+          && validMembership()
+          && request.resource.data.active == true
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && (ownerBootstrap() || invitedClaim() || legacyClaim());
+        allow update: if isWorkspaceAdmin(workspaceId)
+          && validMembership()
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.email == resource.data.email
+          && request.resource.data.invitedByUid == resource.data.invitedByUid
+          && request.resource.data.invitedByEmail == resource.data.invitedByEmail
+          && request.resource.data.joinedAt == resource.data.joinedAt
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedAt == request.time
+          && (uid != request.auth.uid
+            || (request.resource.data.role == resource.data.role && request.resource.data.active == true))
+          && (uid != get(workspacePath(workspaceId)).data.ownerUid
+            || (request.resource.data.role == 'admin' && request.resource.data.active == true));
+        allow delete: if isWorkspaceAdmin(workspaceId)
+          && uid != request.auth.uid
+          && uid != get(workspacePath(workspaceId)).data.ownerUid;
+      }
+
+      match /invites/{email} {
+        function validWorkspaceInvite() {
+          let data = request.resource.data;
+          return email == email.lower()
+            && data.keys().hasOnly([
+              'workspaceId', 'email', 'displayName', 'role', 'active', 'status',
+              'invitedByUid', 'invitedByEmail', 'invitedAt', 'updatedAt',
+              'claimedUid', 'claimedAt'
+            ])
+            && data.keys().hasAll([
+              'workspaceId', 'email', 'displayName', 'role', 'active', 'status',
+              'invitedByUid', 'invitedByEmail', 'invitedAt', 'updatedAt'
+            ])
+            && data.workspaceId == workspaceId
+            && data.email == email
+            && data.displayName is string && data.displayName.size() <= 160
+            && data.role in ['admin', 'member', 'viewer']
+            && data.active is bool
+            && data.status in ['pending', 'claimed']
+            && data.invitedByUid is string
+            && data.invitedByEmail is string
+            && data.invitedAt is timestamp
+            && data.updatedAt is timestamp
+            && isOptionalString(data, 'claimedUid', 128)
+            && isOptionalTimestamp(data, 'claimedAt');
+        }
+
+        allow get, list: if isWorkspaceAdmin(workspaceId);
+        allow create: if isWorkspaceAdmin(workspaceId)
+          && validWorkspaceInvite()
+          && request.resource.data.status == 'pending'
+          && request.resource.data.invitedByUid == request.auth.uid
+          && request.resource.data.invitedByEmail == userEmail()
+          && request.resource.data.invitedAt == request.time
+          && request.resource.data.updatedAt == request.time;
+        allow update: if (
+            isWorkspaceAdmin(workspaceId)
+            || (hasEmail()
+              && email == userEmail()
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'claimedUid', 'claimedAt', 'updatedAt'])
+              && request.resource.data.status == 'claimed'
+              && request.resource.data.claimedUid == request.auth.uid
+              && request.resource.data.claimedAt == request.time
+              && request.resource.data.updatedAt == request.time)
+          ) && validWorkspaceInvite();
+        allow delete: if isWorkspaceAdmin(workspaceId);
+      }
+
+      function validBaby() {
+        let data = request.resource.data;
+        return data.keys().hasOnly([
+            'name', 'nickname', 'gender', 'birthDate', 'birthTime', 'birthWeight', 'birthHeight',
+            'birthHeadCircumference', 'gestationalWeeks', 'bloodType', 'hospital', 'avatarUrl',
+            'avatarStoragePath', 'allergiesSummary', 'emergencyContact', 'notes',
+            'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt',
+            'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'
+          ])
+          && data.keys().hasAll([
+            'name', 'birthDate', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt',
+            'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'
+          ])
+          && data.name is string && data.name.size() > 0 && data.name.size() <= 160
+          && data.birthDate is string && data.birthDate.size() == 10
+          && isOptionalString(data, 'nickname', 100)
+          && data.get('gender', '') in ['', 'female', 'male', 'other']
+          && isOptionalString(data, 'birthTime', 5)
+          && isOptionalNumber(data, 'birthWeight')
+          && isOptionalNumber(data, 'birthHeight')
+          && isOptionalNumber(data, 'birthHeadCircumference')
+          && isOptionalNumber(data, 'gestationalWeeks')
+          && isOptionalString(data, 'bloodType', 10)
+          && isOptionalString(data, 'hospital', 250)
+          && isOptionalString(data, 'avatarUrl', 1500)
+          && isOptionalString(data, 'avatarStoragePath', 1000)
+          && isOptionalString(data, 'allergiesSummary', 1000)
+          && isOptionalString(data, 'emergencyContact', 300)
+          && isOptionalString(data, 'notes', 1500);
+      }
+
+      match /babies/{babyId} {
+        allow read: if isWorkspaceMember(workspaceId);
+        allow create: if canWriteWorkspace(workspaceId) && validBaby() && validSoftCreateMetadata();
+        allow update: if canWriteWorkspace(workspaceId) && validBaby() && validSoftUpdateMetadata();
+        allow delete: if validHardDelete(workspaceId);
+
+        match /growthRecords/{recordId} {
+          function validRecord() {
+            let data = request.resource.data;
+            return data.keys().hasOnly(['measuredAt', 'weightKg', 'heightCm', 'headCircumferenceCm', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.keys().hasAll(['measuredAt', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.measuredAt is timestamp
+              && isOptionalNumber(data, 'weightKg')
+              && isOptionalNumber(data, 'heightCm')
+              && isOptionalNumber(data, 'headCircumferenceCm')
+              && isOptionalString(data, 'notes', 1000)
+              && (data.get('weightKg', null) != null || data.get('heightCm', null) != null || data.get('headCircumferenceCm', null) != null);
+          }
+          allow read: if isWorkspaceMember(workspaceId);
+          allow create: if canWriteWorkspace(workspaceId) && validRecord() && validSoftCreateMetadata();
+          allow update: if canWriteWorkspace(workspaceId) && validRecord() && validSoftUpdateMetadata();
+          allow delete: if validChildHardDelete(workspaceId, babyId);
+        }
+
+        match /vaccinations/{recordId} {
+          function validRecord() {
+            let data = request.resource.data;
+            return data.keys().hasOnly(['vaccineName', 'diseasePrevention', 'doseNumber', 'scheduledDate', 'administeredDate', 'status', 'clinic', 'provider', 'batchNumber', 'reactions', 'documentUrl', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.keys().hasAll(['vaccineName', 'doseNumber', 'scheduledDate', 'status', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.vaccineName is string && data.vaccineName.size() > 0 && data.vaccineName.size() <= 160
+              && data.doseNumber is number && data.doseNumber >= 1 && data.doseNumber <= 30
+              && data.scheduledDate is timestamp
+              && isOptionalTimestamp(data, 'administeredDate')
+              && data.status in ['scheduled', 'upcoming', 'completed', 'overdue', 'cancelled']
+              && isOptionalString(data, 'diseasePrevention', 250)
+              && isOptionalString(data, 'clinic', 250)
+              && isOptionalString(data, 'provider', 160)
+              && isOptionalString(data, 'batchNumber', 100)
+              && isOptionalString(data, 'reactions', 1000)
+              && isOptionalString(data, 'documentUrl', 1000)
+              && isOptionalString(data, 'notes', 1000);
+          }
+          allow read: if isWorkspaceMember(workspaceId);
+          allow create: if canWriteWorkspace(workspaceId) && validRecord() && validSoftCreateMetadata();
+          allow update: if canWriteWorkspace(workspaceId) && validRecord() && validSoftUpdateMetadata();
+          allow delete: if validChildHardDelete(workspaceId, babyId);
+        }
+
+        match /medicalVisits/{recordId} {
+          function validRecord() {
+            let data = request.resource.data;
+            return data.keys().hasOnly(['visitDate', 'reason', 'symptoms', 'temperatureCelsius', 'weightKg', 'doctorName', 'facility', 'diagnosisByDoctor', 'treatmentPlan', 'followUpDate', 'prescriptionUrl', 'testResultUrl', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.keys().hasAll(['visitDate', 'reason', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.visitDate is timestamp
+              && data.reason is string && data.reason.size() > 0 && data.reason.size() <= 300
+              && isOptionalString(data, 'symptoms', 1500)
+              && isOptionalNumber(data, 'temperatureCelsius')
+              && isOptionalNumber(data, 'weightKg')
+              && isOptionalString(data, 'doctorName', 160)
+              && isOptionalString(data, 'facility', 250)
+              && isOptionalString(data, 'diagnosisByDoctor', 1500)
+              && isOptionalString(data, 'treatmentPlan', 2000)
+              && isOptionalTimestamp(data, 'followUpDate')
+              && isOptionalString(data, 'prescriptionUrl', 1000)
+              && isOptionalString(data, 'testResultUrl', 1000)
+              && isOptionalString(data, 'notes', 1500);
+          }
+          allow read: if isWorkspaceMember(workspaceId);
+          allow create: if canWriteWorkspace(workspaceId) && validRecord() && validSoftCreateMetadata();
+          allow update: if canWriteWorkspace(workspaceId) && validRecord() && validSoftUpdateMetadata();
+          allow delete: if validChildHardDelete(workspaceId, babyId);
+        }
+
+        match /feedingRecords/{recordId} {
+          function validRecord() {
+            let data = request.resource.data;
+            return data.keys().hasOnly(['feedingType', 'startedAt', 'endedAt', 'amount', 'unit', 'breastSide', 'foodName', 'ingredients', 'allergyReaction', 'reactionDetails', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.keys().hasAll(['feedingType', 'startedAt', 'allergyReaction', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.feedingType in ['breastfeeding', 'breast_milk_bottle', 'formula', 'solid_food', 'water', 'other']
+              && data.startedAt is timestamp
+              && isOptionalTimestamp(data, 'endedAt')
+              && (data.get('endedAt', null) == null || data.endedAt >= data.startedAt)
+              && isOptionalNumber(data, 'amount')
+              && isOptionalString(data, 'unit', 50)
+              && isOptionalString(data, 'breastSide', 20)
+              && isOptionalString(data, 'foodName', 250)
+              && isOptionalString(data, 'ingredients', 1000)
+              && data.allergyReaction is bool
+              && isOptionalString(data, 'reactionDetails', 1000)
+              && isOptionalString(data, 'notes', 1000);
+          }
+          allow read: if isWorkspaceMember(workspaceId);
+          allow create: if canWriteWorkspace(workspaceId) && validRecord() && validSoftCreateMetadata();
+          allow update: if canWriteWorkspace(workspaceId) && validRecord() && validSoftUpdateMetadata();
+          allow delete: if validChildHardDelete(workspaceId, babyId);
+        }
+
+        match /sleepRecords/{recordId} {
+          function validRecord() {
+            let data = request.resource.data;
+            return data.keys().hasOnly(['startedAt', 'endedAt', 'sleepType', 'wakeCount', 'quality', 'location', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.keys().hasAll(['startedAt', 'endedAt', 'sleepType', 'wakeCount', 'quality', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.startedAt is timestamp
+              && data.endedAt is timestamp && data.endedAt >= data.startedAt
+              && data.sleepType in ['day', 'night']
+              && data.wakeCount is number && data.wakeCount >= 0
+              && data.quality in ['good', 'average', 'poor']
+              && isOptionalString(data, 'location', 200)
+              && isOptionalString(data, 'notes', 1000);
+          }
+          allow read: if isWorkspaceMember(workspaceId);
+          allow create: if canWriteWorkspace(workspaceId) && validRecord() && validSoftCreateMetadata();
+          allow update: if canWriteWorkspace(workspaceId) && validRecord() && validSoftUpdateMetadata();
+          allow delete: if validChildHardDelete(workspaceId, babyId);
+        }
+
+        match /diaperRecords/{recordId} {
+          function validRecord() {
+            let data = request.resource.data;
+            return data.keys().hasOnly(['changedAt', 'diaperType', 'stoolColor', 'stoolConsistency', 'abnormal', 'abnormalDetails', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.keys().hasAll(['changedAt', 'diaperType', 'abnormal', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.changedAt is timestamp
+              && data.diaperType in ['wet', 'dirty', 'both', 'dry']
+              && isOptionalString(data, 'stoolColor', 100)
+              && isOptionalString(data, 'stoolConsistency', 100)
+              && data.abnormal is bool
+              && isOptionalString(data, 'abnormalDetails', 1000)
+              && isOptionalString(data, 'notes', 1000);
+          }
+          allow read: if isWorkspaceMember(workspaceId);
+          allow create: if canWriteWorkspace(workspaceId) && validRecord() && validSoftCreateMetadata();
+          allow update: if canWriteWorkspace(workspaceId) && validRecord() && validSoftUpdateMetadata();
+          allow delete: if validChildHardDelete(workspaceId, babyId);
+        }
+
+        match /symptomRecords/{recordId} {
+          function validRecord() {
+            let data = request.resource.data;
+            return data.keys().hasOnly(['recordedAt', 'temperatureCelsius', 'symptoms', 'otherSymptom', 'severity', 'startedAt', 'endedAt', 'active', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.keys().hasAll(['recordedAt', 'symptoms', 'severity', 'startedAt', 'active', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.recordedAt is timestamp
+              && isOptionalNumber(data, 'temperatureCelsius')
+              && data.symptoms is list && data.symptoms.size() <= 30
+              && isOptionalString(data, 'otherSymptom', 300)
+              && data.severity in ['mild', 'moderate', 'severe']
+              && data.startedAt is timestamp
+              && isOptionalTimestamp(data, 'endedAt')
+              && (data.get('endedAt', null) == null || data.endedAt >= data.startedAt)
+              && data.active is bool
+              && isOptionalString(data, 'notes', 1500);
+          }
+          allow read: if isWorkspaceMember(workspaceId);
+          allow create: if canWriteWorkspace(workspaceId) && validRecord() && validSoftCreateMetadata();
+          allow update: if canWriteWorkspace(workspaceId) && validRecord() && validSoftUpdateMetadata();
+          allow delete: if validChildHardDelete(workspaceId, babyId);
+        }
+
+        match /medications/{recordId} {
+          function validRecord() {
+            let data = request.resource.data;
+            return data.keys().hasOnly(['name', 'category', 'dosage', 'unit', 'route', 'frequency', 'scheduledTimes', 'startDate', 'endDate', 'prescribedBy', 'reason', 'active', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.keys().hasAll(['name', 'category', 'dosage', 'scheduledTimes', 'startDate', 'active', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.name is string && data.name.size() > 0 && data.name.size() <= 250
+              && data.category in ['vitamin', 'medicine', 'supplement', 'other']
+              && data.dosage is string && data.dosage.size() > 0 && data.dosage.size() <= 160
+              && isOptionalString(data, 'unit', 80)
+              && isOptionalString(data, 'route', 120)
+              && isOptionalString(data, 'frequency', 200)
+              && data.scheduledTimes is list && data.scheduledTimes.size() <= 24
+              && data.startDate is timestamp
+              && isOptionalTimestamp(data, 'endDate')
+              && (data.get('endDate', null) == null || data.endDate >= data.startDate)
+              && isOptionalString(data, 'prescribedBy', 200)
+              && isOptionalString(data, 'reason', 1000)
+              && data.active is bool
+              && isOptionalString(data, 'notes', 1000);
+          }
+          allow read: if isWorkspaceMember(workspaceId);
+          allow create: if canWriteWorkspace(workspaceId) && validRecord() && validSoftCreateMetadata();
+          allow update: if canWriteWorkspace(workspaceId) && validRecord() && validSoftUpdateMetadata();
+          allow delete: if validChildHardDelete(workspaceId, babyId);
+        }
+
+        match /medicationLogs/{recordId} {
+          function validRecord() {
+            let data = request.resource.data;
+            return data.keys().hasOnly(['medicationId', 'scheduledAt', 'takenAt', 'status', 'reaction', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.keys().hasAll(['medicationId', 'scheduledAt', 'takenAt', 'status', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.medicationId is string && data.medicationId.size() > 0 && data.medicationId.size() <= 200
+              && data.scheduledAt is timestamp
+              && data.takenAt is timestamp
+              && data.status in ['taken', 'missed', 'skipped']
+              && isOptionalString(data, 'reaction', 1000)
+              && isOptionalString(data, 'notes', 1000);
+          }
+          allow read: if isWorkspaceMember(workspaceId);
+          allow create: if canWriteWorkspace(workspaceId) && validRecord() && validSoftCreateMetadata();
+          allow update: if canWriteWorkspace(workspaceId) && validRecord() && validSoftUpdateMetadata();
+          allow delete: if validChildHardDelete(workspaceId, babyId);
+        }
+
+        match /allergies/{recordId} {
+          function validRecord() {
+            let data = request.resource.data;
+            return data.keys().hasOnly(['allergen', 'allergyType', 'discoveredAt', 'symptoms', 'severity', 'treatment', 'confirmedByDoctor', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.keys().hasAll(['allergen', 'allergyType', 'discoveredAt', 'severity', 'confirmedByDoctor', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.allergen is string && data.allergen.size() > 0 && data.allergen.size() <= 200
+              && data.allergyType in ['food', 'medicine', 'environment', 'other']
+              && data.discoveredAt is timestamp
+              && isOptionalString(data, 'symptoms', 1000)
+              && data.severity in ['mild', 'moderate', 'severe']
+              && isOptionalString(data, 'treatment', 1000)
+              && data.confirmedByDoctor is bool
+              && isOptionalString(data, 'notes', 1000);
+          }
+          allow read: if isWorkspaceMember(workspaceId);
+          allow create: if canWriteWorkspace(workspaceId) && validRecord() && validSoftCreateMetadata();
+          allow update: if canWriteWorkspace(workspaceId) && validRecord() && validSoftUpdateMetadata();
+          allow delete: if validChildHardDelete(workspaceId, babyId);
+        }
+
+        match /milestones/{recordId} {
+          function validRecord() {
+            let data = request.resource.data;
+            return data.keys().hasOnly(['milestoneName', 'achievedDate', 'category', 'mediaUrl', 'mediaStoragePath', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.keys().hasAll(['milestoneName', 'achievedDate', 'category', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.milestoneName is string && data.milestoneName.size() > 0 && data.milestoneName.size() <= 250
+              && data.achievedDate is timestamp
+              && data.category in ['motor', 'language', 'social', 'cognitive', 'other']
+              && isOptionalString(data, 'mediaUrl', 1500)
+              && isOptionalString(data, 'mediaStoragePath', 1000)
+              && isOptionalString(data, 'notes', 1500);
+          }
+          allow read: if isWorkspaceMember(workspaceId);
+          allow create: if canWriteWorkspace(workspaceId) && validRecord() && validSoftCreateMetadata();
+          allow update: if canWriteWorkspace(workspaceId) && validRecord() && validSoftUpdateMetadata();
+          allow delete: if validChildHardDelete(workspaceId, babyId);
+        }
+
+        match /teethingRecords/{recordId} {
+          function validRecord() {
+            let data = request.resource.data;
+            return data.keys().hasOnly(['toothPosition', 'symptomStartDate', 'eruptedDate', 'symptoms', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.keys().hasAll(['toothPosition', 'eruptedDate', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.toothPosition is string && data.toothPosition.size() > 0 && data.toothPosition.size() <= 20
+              && isOptionalTimestamp(data, 'symptomStartDate')
+              && data.eruptedDate is timestamp
+              && isOptionalString(data, 'symptoms', 1000)
+              && isOptionalString(data, 'notes', 1000);
+          }
+          allow read: if isWorkspaceMember(workspaceId);
+          allow create: if canWriteWorkspace(workspaceId) && validRecord() && validSoftCreateMetadata();
+          allow update: if canWriteWorkspace(workspaceId) && validRecord() && validSoftUpdateMetadata();
+          allow delete: if validChildHardDelete(workspaceId, babyId);
+        }
+
+        match /reminders/{recordId} {
+          function validRecord() {
+            let data = request.resource.data;
+            return data.keys().hasOnly(['title', 'reminderType', 'scheduledAt', 'completed', 'linkedCollection', 'linkedRecordId', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.keys().hasAll(['title', 'reminderType', 'scheduledAt', 'completed', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt', 'isDeleted', 'deletedAt', 'deletedByUid', 'deletedByEmail'])
+              && data.title is string && data.title.size() > 0 && data.title.size() <= 250
+              && data.reminderType in ['vaccination', 'medical_visit', 'follow_up', 'medication', 'vitamin', 'growth', 'other']
+              && data.scheduledAt is timestamp
+              && data.completed is bool
+              && isOptionalString(data, 'linkedCollection', 100)
+              && isOptionalString(data, 'linkedRecordId', 200)
+              && isOptionalString(data, 'notes', 1000);
+          }
+          allow read: if isWorkspaceMember(workspaceId);
+          allow create: if canWriteWorkspace(workspaceId) && validRecord() && validSoftCreateMetadata();
+          allow update: if canWriteWorkspace(workspaceId) && validRecord() && validSoftUpdateMetadata();
+          allow delete: if validChildHardDelete(workspaceId, babyId);
+        }
+      }
     }
 
-    function validAllowedUser(email) {
+    match /workspaceInvites/{email}/memberships/{workspaceId} {
+      function validGlobalInvite() {
+        let data = request.resource.data;
+        return email == email.lower()
+          && data.keys().hasOnly([
+            'workspaceId', 'email', 'displayName', 'role', 'active', 'status',
+            'invitedByUid', 'invitedByEmail', 'invitedAt', 'updatedAt',
+            'claimedUid', 'claimedAt'
+          ])
+          && data.keys().hasAll([
+            'workspaceId', 'email', 'displayName', 'role', 'active', 'status',
+            'invitedByUid', 'invitedByEmail', 'invitedAt', 'updatedAt'
+          ])
+          && data.workspaceId == workspaceId
+          && data.email == email
+          && data.displayName is string && data.displayName.size() <= 160
+          && data.role in ['admin', 'member', 'viewer']
+          && data.active is bool
+          && data.status in ['pending', 'claimed']
+          && data.invitedByUid is string
+          && data.invitedByEmail is string
+          && data.invitedAt is timestamp
+          && data.updatedAt is timestamp
+          && isOptionalString(data, 'claimedUid', 128)
+          && isOptionalTimestamp(data, 'claimedAt');
+      }
+
+      allow get, list: if hasEmail() && (email == userEmail() || isWorkspaceAdmin(workspaceId));
+      allow create: if isWorkspaceAdmin(workspaceId)
+        && validGlobalInvite()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.invitedByUid == request.auth.uid
+        && request.resource.data.invitedByEmail == userEmail()
+        && request.resource.data.invitedAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if (
+          isWorkspaceAdmin(workspaceId)
+          || (hasEmail()
+            && email == userEmail()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'claimedUid', 'claimedAt', 'updatedAt'])
+            && request.resource.data.status == 'claimed'
+            && request.resource.data.claimedUid == request.auth.uid
+            && request.resource.data.claimedAt == request.time
+            && request.resource.data.updatedAt == request.time)
+        ) && validGlobalInvite();
+      allow delete: if isWorkspaceAdmin(workspaceId);
+    }
+
+    function validLegacyAllowedUser(email) {
       let data = request.resource.data;
       return email == email.lower()
         && data.keys().hasOnly(['email', 'displayName', 'role', 'active', 'createdByEmail', 'createdAt', 'updatedAt'])
         && data.keys().hasAll(['email', 'displayName', 'role', 'active', 'createdByEmail', 'createdAt', 'updatedAt'])
         && data.email == email
-        && data.email is string
         && data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 160
         && data.role in ['admin', 'member']
         && data.active is bool
@@ -76,319 +686,34 @@ service cloud.firestore {
 
     match /allowedUsers/{email} {
       allow get: if hasEmail() && email == userEmail();
-      allow list: if isAdmin();
-      allow create: if isAdmin()
-        && validAllowedUser(email)
+      allow list: if isLegacyAdmin();
+      allow create: if isLegacyAdmin()
+        && validLegacyAllowedUser(email)
         && request.resource.data.createdByEmail == userEmail()
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
-      allow update: if isAdmin()
-        && validAllowedUser(email)
+      allow update: if isLegacyAdmin()
+        && validLegacyAllowedUser(email)
         && request.resource.data.email == resource.data.email
         && request.resource.data.createdByEmail == resource.data.createdByEmail
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time
-        && (email != userEmail()
-          || (request.resource.data.role == resource.data.role
-            && request.resource.data.active == true));
-      allow delete: if isAdmin() && email != userEmail();
+        && (email != userEmail() || (request.resource.data.role == resource.data.role && request.resource.data.active == true));
+      allow delete: if isLegacyAdmin() && email != userEmail();
     }
 
-    function validBaby() {
-      let data = request.resource.data;
-      return data.keys().hasOnly([
-          'name', 'nickname', 'gender', 'birthDate', 'birthTime', 'birthWeight', 'birthHeight',
-          'birthHeadCircumference', 'gestationalWeeks', 'bloodType', 'hospital', 'avatarUrl',
-          'allergiesSummary', 'emergencyContact', 'notes',
-          'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'
-        ])
-        && data.keys().hasAll(['name', 'birthDate', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-        && data.name is string && data.name.size() > 0 && data.name.size() <= 160
-        && data.birthDate is string && data.birthDate.size() == 10
-        && isOptionalString(data, 'nickname', 100)
-        && (data.get('gender', '') in ['', 'female', 'male', 'other'])
-        && isOptionalString(data, 'birthTime', 5)
-        && isOptionalNumber(data, 'birthWeight')
-        && isOptionalNumber(data, 'birthHeight')
-        && isOptionalNumber(data, 'birthHeadCircumference')
-        && isOptionalNumber(data, 'gestationalWeeks')
-        && isOptionalString(data, 'bloodType', 10)
-        && isOptionalString(data, 'hospital', 250)
-        && isOptionalString(data, 'avatarUrl', 1000)
-        && isOptionalString(data, 'allergiesSummary', 1000)
-        && isOptionalString(data, 'emergencyContact', 300)
-        && isOptionalString(data, 'notes', 1500);
-    }
-
+    // Dữ liệu MVP cũ chỉ được đọc để migration. Mọi ghi mới phải nằm dưới workspaces/{workspaceId}.
     match /babies/{babyId} {
-      allow read: if isAllowed();
-      allow create: if isAllowed() && validBaby() && validCreateMetadata();
-      allow update: if isAllowed() && validBaby() && validUpdateMetadata();
-      allow delete: if isAllowed();
-
-      match /growthRecords/{recordId} {
-        function validGrowth() {
-          let data = request.resource.data;
-          return data.keys().hasOnly(['measuredAt', 'weightKg', 'heightCm', 'headCircumferenceCm', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.keys().hasAll(['measuredAt', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.measuredAt is timestamp
-            && isOptionalNumber(data, 'weightKg')
-            && isOptionalNumber(data, 'heightCm')
-            && isOptionalNumber(data, 'headCircumferenceCm')
-            && isOptionalString(data, 'notes', 1000)
-            && (data.get('weightKg', null) != null || data.get('heightCm', null) != null || data.get('headCircumferenceCm', null) != null);
-        }
-        allow read: if isAllowed();
-        allow create: if isAllowed() && validGrowth() && validCreateMetadata();
-        allow update: if isAllowed() && validGrowth() && validUpdateMetadata();
-        allow delete: if isAllowed();
+      allow read: if isLegacyAllowed();
+      allow write: if false;
+      match /{subcollection}/{recordId} {
+        allow read: if isLegacyAllowed();
+        allow write: if false;
       }
+    }
 
-      match /vaccinations/{recordId} {
-        function validVaccination() {
-          let data = request.resource.data;
-          return data.keys().hasOnly(['vaccineName', 'diseasePrevention', 'doseNumber', 'scheduledDate', 'administeredDate', 'status', 'clinic', 'provider', 'batchNumber', 'reactions', 'documentUrl', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.keys().hasAll(['vaccineName', 'doseNumber', 'scheduledDate', 'status', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.vaccineName is string && data.vaccineName.size() > 0 && data.vaccineName.size() <= 160
-            && data.doseNumber is number && data.doseNumber >= 1
-            && data.scheduledDate is timestamp
-            && isOptionalTimestamp(data, 'administeredDate')
-            && data.status in ['scheduled', 'upcoming', 'completed', 'overdue', 'cancelled']
-            && isOptionalString(data, 'diseasePrevention', 250)
-            && isOptionalString(data, 'clinic', 250)
-            && isOptionalString(data, 'provider', 160)
-            && isOptionalString(data, 'batchNumber', 100)
-            && isOptionalString(data, 'reactions', 1000)
-            && isOptionalString(data, 'documentUrl', 1000)
-            && isOptionalString(data, 'notes', 1000);
-        }
-        allow read: if isAllowed();
-        allow create: if isAllowed() && validVaccination() && validCreateMetadata();
-        allow update: if isAllowed() && validVaccination() && validUpdateMetadata();
-        allow delete: if isAllowed();
-      }
-
-      match /medicalVisits/{recordId} {
-        function validMedicalVisit() {
-          let data = request.resource.data;
-          return data.keys().hasOnly(['visitDate', 'reason', 'symptoms', 'temperatureCelsius', 'weightKg', 'doctorName', 'facility', 'diagnosisByDoctor', 'treatmentPlan', 'followUpDate', 'prescriptionUrl', 'testResultUrl', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.keys().hasAll(['visitDate', 'reason', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.visitDate is timestamp
-            && data.reason is string && data.reason.size() > 0 && data.reason.size() <= 300
-            && isOptionalString(data, 'symptoms', 1500)
-            && isOptionalNumber(data, 'temperatureCelsius')
-            && isOptionalNumber(data, 'weightKg')
-            && isOptionalString(data, 'doctorName', 160)
-            && isOptionalString(data, 'facility', 250)
-            && isOptionalString(data, 'diagnosisByDoctor', 1500)
-            && isOptionalString(data, 'treatmentPlan', 2000)
-            && isOptionalTimestamp(data, 'followUpDate')
-            && isOptionalString(data, 'prescriptionUrl', 1000)
-            && isOptionalString(data, 'testResultUrl', 1000)
-            && isOptionalString(data, 'notes', 1500);
-        }
-        allow read: if isAllowed();
-        allow create: if isAllowed() && validMedicalVisit() && validCreateMetadata();
-        allow update: if isAllowed() && validMedicalVisit() && validUpdateMetadata();
-        allow delete: if isAllowed();
-      }
-
-      match /feedingRecords/{recordId} {
-        function validFeeding() {
-          let data = request.resource.data;
-          return data.keys().hasOnly(['feedingType', 'startedAt', 'endedAt', 'amount', 'unit', 'breastSide', 'foodName', 'ingredients', 'allergyReaction', 'reactionDetails', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.keys().hasAll(['feedingType', 'startedAt', 'allergyReaction', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.feedingType in ['breastfeeding', 'breast_milk_bottle', 'formula', 'solid_food', 'water', 'other']
-            && data.startedAt is timestamp
-            && isOptionalTimestamp(data, 'endedAt')
-            && isOptionalNumber(data, 'amount')
-            && isOptionalString(data, 'unit', 30)
-            && (data.get('breastSide', null) == null || data.get('breastSide', null) in ['left', 'right', 'both'])
-            && isOptionalString(data, 'foodName', 250)
-            && isOptionalString(data, 'ingredients', 1000)
-            && data.allergyReaction is bool
-            && isOptionalString(data, 'reactionDetails', 1000)
-            && isOptionalString(data, 'notes', 1000);
-        }
-        allow read: if isAllowed();
-        allow create: if isAllowed() && validFeeding() && validCreateMetadata();
-        allow update: if isAllowed() && validFeeding() && validUpdateMetadata();
-        allow delete: if isAllowed();
-      }
-
-      match /sleepRecords/{recordId} {
-        function validSleep() {
-          let data = request.resource.data;
-          return data.keys().hasOnly(['startedAt', 'endedAt', 'sleepType', 'wakeCount', 'quality', 'location', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.keys().hasAll(['startedAt', 'endedAt', 'sleepType', 'wakeCount', 'quality', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.startedAt is timestamp && data.endedAt is timestamp && data.endedAt >= data.startedAt
-            && data.sleepType in ['day', 'night']
-            && data.wakeCount is number && data.wakeCount >= 0
-            && data.quality in ['good', 'average', 'poor']
-            && isOptionalString(data, 'location', 200)
-            && isOptionalString(data, 'notes', 1000);
-        }
-        allow read: if isAllowed();
-        allow create: if isAllowed() && validSleep() && validCreateMetadata();
-        allow update: if isAllowed() && validSleep() && validUpdateMetadata();
-        allow delete: if isAllowed();
-      }
-
-      match /diaperRecords/{recordId} {
-        function validDiaper() {
-          let data = request.resource.data;
-          return data.keys().hasOnly(['changedAt', 'diaperType', 'stoolColor', 'stoolConsistency', 'abnormal', 'abnormalDetails', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.keys().hasAll(['changedAt', 'diaperType', 'abnormal', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.changedAt is timestamp
-            && data.diaperType in ['wet', 'dirty', 'both', 'dry']
-            && isOptionalString(data, 'stoolColor', 100)
-            && isOptionalString(data, 'stoolConsistency', 100)
-            && data.abnormal is bool
-            && isOptionalString(data, 'abnormalDetails', 1000)
-            && isOptionalString(data, 'notes', 1000);
-        }
-        allow read: if isAllowed();
-        allow create: if isAllowed() && validDiaper() && validCreateMetadata();
-        allow update: if isAllowed() && validDiaper() && validUpdateMetadata();
-        allow delete: if isAllowed();
-      }
-
-      match /symptomRecords/{recordId} {
-        function validSymptom() {
-          let data = request.resource.data;
-          return data.keys().hasOnly(['recordedAt', 'temperatureCelsius', 'symptoms', 'otherSymptom', 'severity', 'startedAt', 'endedAt', 'active', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.keys().hasAll(['recordedAt', 'symptoms', 'severity', 'startedAt', 'active', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.recordedAt is timestamp
-            && isOptionalNumber(data, 'temperatureCelsius')
-            && data.symptoms is list && data.symptoms.size() <= 30
-            && isOptionalString(data, 'otherSymptom', 300)
-            && data.severity in ['mild', 'moderate', 'severe']
-            && data.startedAt is timestamp
-            && isOptionalTimestamp(data, 'endedAt')
-            && data.active is bool
-            && isOptionalString(data, 'notes', 1500);
-        }
-        allow read: if isAllowed();
-        allow create: if isAllowed() && validSymptom() && validCreateMetadata();
-        allow update: if isAllowed() && validSymptom() && validUpdateMetadata();
-        allow delete: if isAllowed();
-      }
-
-      match /medications/{recordId} {
-        function validMedication() {
-          let data = request.resource.data;
-          return data.keys().hasOnly(['name', 'category', 'dosage', 'unit', 'route', 'frequency', 'scheduledTimes', 'startDate', 'endDate', 'prescribedBy', 'reason', 'active', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.keys().hasAll(['name', 'category', 'dosage', 'scheduledTimes', 'startDate', 'active', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.name is string && data.name.size() > 0 && data.name.size() <= 250
-            && data.category in ['vitamin', 'medicine', 'supplement', 'other']
-            && data.dosage is string && data.dosage.size() > 0 && data.dosage.size() <= 160
-            && isOptionalString(data, 'unit', 80)
-            && isOptionalString(data, 'route', 120)
-            && isOptionalString(data, 'frequency', 200)
-            && data.scheduledTimes is list && data.scheduledTimes.size() <= 24
-            && data.startDate is timestamp
-            && isOptionalTimestamp(data, 'endDate')
-            && isOptionalString(data, 'prescribedBy', 200)
-            && isOptionalString(data, 'reason', 1000)
-            && data.active is bool
-            && isOptionalString(data, 'notes', 1000);
-        }
-        allow read: if isAllowed();
-        allow create: if isAllowed() && validMedication() && validCreateMetadata();
-        allow update: if isAllowed() && validMedication() && validUpdateMetadata();
-        allow delete: if isAllowed();
-      }
-
-      match /medicationLogs/{recordId} {
-        function validMedicationLog() {
-          let data = request.resource.data;
-          return data.keys().hasOnly(['medicationId', 'scheduledAt', 'takenAt', 'status', 'reaction', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.keys().hasAll(['medicationId', 'scheduledAt', 'takenAt', 'status', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.medicationId is string && data.medicationId.size() > 0 && data.medicationId.size() <= 200
-            && data.scheduledAt is timestamp
-            && data.takenAt is timestamp
-            && data.status in ['taken', 'missed', 'skipped']
-            && isOptionalString(data, 'reaction', 1000)
-            && isOptionalString(data, 'notes', 1000);
-        }
-        allow read: if isAllowed();
-        allow create: if isAllowed() && validMedicationLog() && validCreateMetadata();
-        allow update: if isAllowed() && validMedicationLog() && validUpdateMetadata();
-        allow delete: if isAllowed();
-      }
-
-      match /allergies/{recordId} {
-        function validAllergy() {
-          let data = request.resource.data;
-          return data.keys().hasOnly(['allergen', 'allergyType', 'discoveredAt', 'symptoms', 'severity', 'treatment', 'confirmedByDoctor', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.keys().hasAll(['allergen', 'allergyType', 'discoveredAt', 'severity', 'confirmedByDoctor', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.allergen is string && data.allergen.size() > 0 && data.allergen.size() <= 200
-            && data.allergyType in ['food', 'medicine', 'environment', 'other']
-            && data.discoveredAt is timestamp
-            && isOptionalString(data, 'symptoms', 1000)
-            && data.severity in ['mild', 'moderate', 'severe']
-            && isOptionalString(data, 'treatment', 1000)
-            && data.confirmedByDoctor is bool
-            && isOptionalString(data, 'notes', 1000);
-        }
-        allow read: if isAllowed();
-        allow create: if isAllowed() && validAllergy() && validCreateMetadata();
-        allow update: if isAllowed() && validAllergy() && validUpdateMetadata();
-        allow delete: if isAllowed();
-      }
-
-      match /milestones/{recordId} {
-        function validMilestone() {
-          let data = request.resource.data;
-          return data.keys().hasOnly(['milestoneName', 'achievedDate', 'category', 'mediaUrl', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.keys().hasAll(['milestoneName', 'achievedDate', 'category', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.milestoneName is string && data.milestoneName.size() > 0 && data.milestoneName.size() <= 250
-            && data.achievedDate is timestamp
-            && data.category in ['motor', 'language', 'social', 'cognitive', 'other']
-            && isOptionalString(data, 'mediaUrl', 1000)
-            && isOptionalString(data, 'notes', 1500);
-        }
-        allow read: if isAllowed();
-        allow create: if isAllowed() && validMilestone() && validCreateMetadata();
-        allow update: if isAllowed() && validMilestone() && validUpdateMetadata();
-        allow delete: if isAllowed();
-      }
-
-      match /teethingRecords/{recordId} {
-        function validTeething() {
-          let data = request.resource.data;
-          return data.keys().hasOnly(['toothPosition', 'symptomStartDate', 'eruptedDate', 'symptoms', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.keys().hasAll(['toothPosition', 'eruptedDate', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.toothPosition is string && data.toothPosition.size() > 0 && data.toothPosition.size() <= 20
-            && isOptionalTimestamp(data, 'symptomStartDate')
-            && data.eruptedDate is timestamp
-            && isOptionalString(data, 'symptoms', 1000)
-            && isOptionalString(data, 'notes', 1000);
-        }
-        allow read: if isAllowed();
-        allow create: if isAllowed() && validTeething() && validCreateMetadata();
-        allow update: if isAllowed() && validTeething() && validUpdateMetadata();
-        allow delete: if isAllowed();
-      }
-
-      match /reminders/{recordId} {
-        function validReminder() {
-          let data = request.resource.data;
-          return data.keys().hasOnly(['title', 'reminderType', 'scheduledAt', 'completed', 'linkedCollection', 'linkedRecordId', 'notes', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.keys().hasAll(['title', 'reminderType', 'scheduledAt', 'completed', 'createdByUid', 'createdByEmail', 'createdAt', 'updatedAt'])
-            && data.title is string && data.title.size() > 0 && data.title.size() <= 250
-            && data.reminderType in ['vaccination', 'medical_visit', 'follow_up', 'medication', 'vitamin', 'growth', 'other']
-            && data.scheduledAt is timestamp
-            && data.completed is bool
-            && isOptionalString(data, 'linkedCollection', 100)
-            && isOptionalString(data, 'linkedRecordId', 200)
-            && isOptionalString(data, 'notes', 1000);
-        }
-        allow read: if isAllowed();
-        allow create: if isAllowed() && validReminder() && validCreateMetadata();
-        allow update: if isAllowed() && validReminder() && validUpdateMetadata();
-        allow delete: if isAllowed();
-      }
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
