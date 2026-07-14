@@ -26,3 +26,11 @@
   .modal-panel { width: min(760px, 100%); max-height: min(90vh, 900px); border-radius: var(--radius-lg); }
   .toast-region { bottom: 1rem; }
 }
+
+@media (max-width: 699px) {
+  .topbar { align-items: flex-start; }
+  .topbar-actions { max-width: 64%; flex-wrap: wrap; justify-content: flex-end; }
+  .workspace-selector, .baby-selector { max-width: 132px; min-width: 0; }
+  .pagination-bar { flex-wrap: wrap; justify-content: center; }
+  .pagination-bar span { order: -1; width: 100%; text-align: center; }
+}

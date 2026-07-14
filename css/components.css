@@ -112,3 +112,15 @@
 .state-illustration .app-icon, .state-illustration .material-symbols-rounded { --icon-size: 38px; }
 .dropdown-menu button { display: flex; align-items: center; gap: .55rem; }
 .modal-close { display: grid; place-items: center; }
+
+/* Workspace, soft-delete, Storage, pagination and WHO upgrade */
+.workspace-card { border-color: color-mix(in srgb, var(--color-primary) 28%, var(--color-border)); }
+.workspace-selector { max-width: 180px; min-height: 42px; padding: .5rem .65rem; }
+.pagination-bar { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-top: 1rem; padding-top: .8rem; border-top: 1px solid var(--color-border); }
+.record-card-deleted { border-style: dashed; opacity: .9; background: color-mix(in srgb, var(--color-danger) 4%, var(--color-surface)); }
+.image-upload-preview { display: block; width: min(180px, 100%); aspect-ratio: 1; margin-top: .65rem; object-fit: cover; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-surface-alt); }
+.record-image { width: 100%; max-height: 320px; object-fit: cover; border-radius: 14px; border: 1px solid var(--color-border); }
+.who-summary-grid { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .75rem; }
+.who-stat { display: grid; gap: .35rem; padding: .85rem; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface-alt); }
+.who-stat strong { font-size: 1.2rem; color: var(--color-primary); }
+.break-word { overflow-wrap: anywhere; word-break: break-word; }
