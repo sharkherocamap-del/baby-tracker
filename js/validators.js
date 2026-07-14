@@ -35,7 +35,7 @@ export function validateTemperature(value) {
 }
 
 export function validateRole(value) {
-  return value === "admin" || value === "member";
+  return value === "admin" || value === "member" || value === "viewer";
 }
 
 export function validateField(field, rawValue, allValues = {}) {

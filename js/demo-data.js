@@ -1,5 +1,5 @@
 import { getState, setSelectedBaby } from "./app-state.js";
-import { newDocumentId, runWriteBatch } from "./firestore-service.js";
+import { getBabiesPath, getBabySubcollection, newDocumentId, runWriteBatch } from "./firestore-service.js";
 import { confirmDialog } from "./modal.js";
 import { friendlyErrorMessage, showToast } from "./toast.js";
 
@@ -22,12 +22,12 @@ const dateOnly = (days) => {
 };
 
 function addRecord(operations, babyId, collection, data, id = null) {
-  operations.push({ type: "set", path: `babies/${babyId}/${collection}`, ...(id ? { id } : {}), data });
+  operations.push({ type: "set", path: getBabySubcollection(babyId, collection), ...(id ? { id } : {}), data });
 }
 
 function buildBasicProfile(operations) {
-  const babyId = newDocumentId("babies");
-  operations.push({ type: "set", path: "babies", id: babyId, data: {
+  const babyId = newDocumentId(getBabiesPath());
+  operations.push({ type: "set", path: getBabiesPath(), id: babyId, data: {
     name: "Nguyễn An Nhiên", nickname: "Bông", gender: "female", birthDate: dateOnly(-210), birthTime: "08:30",
     birthWeight: 3.2, birthHeight: 50, birthHeadCircumference: 34, gestationalWeeks: 39, bloodType: "O+", hospital: "Bệnh viện Demo",
     avatarUrl: "", allergiesSummary: "Chưa ghi nhận dị ứng", emergencyContact: "Ba/Mẹ: 0900 000 000",
@@ -45,15 +45,15 @@ function buildBasicProfile(operations) {
   [[-1,8,"wet"],[-1,12,"dirty"],[0,7,"wet"],[0,11,"both"]].forEach(([days,h,type]) => addRecord(operations,babyId,"diaperRecords",{ changedAt:at(days,h), diaperType:type, stoolColor:type!=="wet"?"Vàng":"", stoolConsistency:type!=="wet"?"Mềm":"", abnormal:false, abnormalDetails:"", notes:"Dữ liệu demo" }));
   addRecord(operations,babyId,"milestones",{ milestoneName:"Biết cười", achievedDate:at(-100), category:"social", mediaUrl:"", notes:"Dữ liệu demo" });
   addRecord(operations,babyId,"milestones",{ milestoneName:"Biết lẫy", achievedDate:at(-25), category:"motor", mediaUrl:"", notes:"Dữ liệu demo" });
-  const medicationId = newDocumentId(`babies/${babyId}/medications`);
+  const medicationId = newDocumentId(getBabySubcollection(babyId, "medications"));
   addRecord(operations,babyId,"medications",{ name:"Vitamin D demo", category:"vitamin", dosage:"Theo hướng dẫn bác sĩ", unit:"giọt", route:"Uống", frequency:"Mỗi ngày", scheduledTimes:["08:00"], startDate:at(-30), endDate:null, prescribedBy:"BS. Demo", reason:"Dữ liệu minh họa", active:true, notes:"Không phải khuyến nghị liều" },medicationId);
   addRecord(operations,babyId,"reminders",{ title:"Lịch khám demo", reminderType:"medical_visit", scheduledAt:at(7,9), completed:false, linkedCollection:"medicalVisits", linkedRecordId:"", notes:"Chỉ hiển thị khi mở website" });
   return babyId;
 }
 
 function buildCompleteProfile(operations) {
-  const babyId = newDocumentId("babies");
-  operations.push({ type: "set", path: "babies", id: babyId, data: {
+  const babyId = newDocumentId(getBabiesPath());
+  operations.push({ type: "set", path: getBabiesPath(), id: babyId, data: {
     name: "Trần Gia Hân", nickname: "Mây", gender: "female", birthDate: dateOnly(-310), birthTime: "06:45",
     birthWeight: 3.35, birthHeight: 51, birthHeadCircumference: 34.5, gestationalWeeks: 39, bloodType: "A+", hospital: "Bệnh viện Gia đình Demo",
     avatarUrl: "https://placehold.co/320x320/png?text=Baby+Demo", allergiesSummary: "Theo dõi phản ứng nhẹ với trứng; đã có bản ghi chi tiết trong mục Dị ứng.",
@@ -64,14 +64,14 @@ function buildCompleteProfile(operations) {
     measuredAt:at(days,8,30), weightKg:w, heightCm:h, headCircumferenceCm:head, notes:`Lần đo demo đầy đủ ${index+1}; đo tại nhà và nhập thủ công.`
   }));
 
-  const vaccineCompletedId = newDocumentId(`babies/${babyId}/vaccinations`);
+  const vaccineCompletedId = newDocumentId(getBabySubcollection(babyId, "vaccinations"));
   addRecord(operations,babyId,"vaccinations",{ vaccineName:"Vaccine 6 trong 1 (minh họa)", diseasePrevention:"Danh mục bệnh theo thông tin người dùng nhập", doseNumber:2, scheduledDate:at(-95,9), administeredDate:at(-94,9,15), status:"completed", clinic:"Trung tâm tiêm chủng Demo", provider:"Điều dưỡng Nguyễn Demo", batchNumber:"LOT-DEMO-621", reactions:"Sưng nhẹ tại chỗ tiêm trong ngày đầu", documentUrl:"https://example.com/demo-vaccine-certificate.pdf", notes:"Dữ liệu minh họa, không phải lịch tiêm khuyến nghị." },vaccineCompletedId);
   addRecord(operations,babyId,"vaccinations",{ vaccineName:"Phế cầu (minh họa)", diseasePrevention:"Thông tin phòng bệnh do người dùng nhập", doseNumber:2, scheduledDate:at(-60,9), administeredDate:at(-60,9,10), status:"completed", clinic:"Phòng tiêm Demo", provider:"Điều dưỡng Trần Demo", batchNumber:"PCV-DEMO-02", reactions:"Không ghi nhận", documentUrl:"https://example.com/demo-pcv.pdf", notes:"Bản ghi demo đầy đủ." });
   addRecord(operations,babyId,"vaccinations",{ vaccineName:"Vaccine sắp tới (minh họa)", diseasePrevention:"Bệnh demo", doseNumber:3, scheduledDate:at(6,9), administeredDate:null, status:"upcoming", clinic:"Trung tâm tiêm chủng Demo", provider:"Chưa phân công", batchNumber:"Chưa có", reactions:"Chưa tiêm", documentUrl:"https://example.com/demo-appointment.pdf", notes:"Lịch minh họa; hãy dùng lịch do cơ sở y tế cung cấp." });
   addRecord(operations,babyId,"vaccinations",{ vaccineName:"Vaccine đã lên lịch (minh họa)", diseasePrevention:"Bệnh demo khác", doseNumber:1, scheduledDate:at(35,10), administeredDate:null, status:"scheduled", clinic:"Bệnh viện Demo", provider:"Chưa xác định", batchNumber:"Chưa có", reactions:"Chưa tiêm", documentUrl:"https://example.com/demo-schedule.pdf", notes:"Dữ liệu demo." });
   addRecord(operations,babyId,"vaccinations",{ vaccineName:"Lịch đã hủy (minh họa)", diseasePrevention:"Bệnh demo", doseNumber:1, scheduledDate:at(-20,10), administeredDate:null, status:"cancelled", clinic:"Phòng tiêm Demo", provider:"Chưa phân công", batchNumber:"Không áp dụng", reactions:"Không áp dụng", documentUrl:"https://example.com/demo-cancelled.pdf", notes:"Hủy do thay đổi lịch gia đình." });
 
-  const visitId = newDocumentId(`babies/${babyId}/medicalVisits`);
+  const visitId = newDocumentId(getBabySubcollection(babyId, "medicalVisits"));
   addRecord(operations,babyId,"medicalVisits",{ visitDate:at(-42,9,30), reason:"Khám sức khỏe định kỳ", symptoms:"Không có triệu chứng cấp tính", temperatureCelsius:36.7, weightKg:8.3, doctorName:"BS. Lê Minh Demo", facility:"Phòng khám Nhi Demo", diagnosisByDoctor:"Nội dung chẩn đoán minh họa do người dùng ghi lại", treatmentPlan:"Theo dõi sinh hoạt và làm theo hướng dẫn trực tiếp của bác sĩ", followUpDate:at(48,9,30), prescriptionUrl:"https://example.com/demo-prescription.pdf", testResultUrl:"https://example.com/demo-test-result.pdf", notes:"Bản ghi đầy đủ các trường để thử giao diện và báo cáo." },visitId);
   addRecord(operations,babyId,"medicalVisits",{ visitDate:at(-18,15), reason:"Khám vì ho và sổ mũi", symptoms:"Ho nhẹ, sổ mũi, ăn giảm nhẹ", temperatureCelsius:37.4, weightKg:8.6, doctorName:"BS. Phạm An Demo", facility:"Bệnh viện Demo", diagnosisByDoctor:"Kết luận minh họa từ buổi khám", treatmentPlan:"Thực hiện đúng hướng dẫn được bác sĩ cung cấp", followUpDate:at(-11,15), prescriptionUrl:"https://example.com/demo-prescription-2.pdf", testResultUrl:"https://example.com/demo-result-2.pdf", notes:"Triệu chứng đã ổn theo ghi nhận của gia đình." });
   addRecord(operations,babyId,"medicalVisits",{ visitDate:at(-5,8,45), reason:"Tái khám", symptoms:"Đã giảm ho", temperatureCelsius:36.8, weightKg:8.8, doctorName:"BS. Phạm An Demo", facility:"Bệnh viện Demo", diagnosisByDoctor:"Theo dõi ổn định (dữ liệu minh họa)", treatmentPlan:"Tiếp tục theo hướng dẫn của bác sĩ", followUpDate:null, prescriptionUrl:"https://example.com/demo-followup-prescription.pdf", testResultUrl:"https://example.com/demo-followup-result.pdf", notes:"Không dùng nội dung demo để tự điều trị." });
@@ -101,8 +101,8 @@ function buildCompleteProfile(operations) {
   addRecord(operations,babyId,"symptomRecords",{ recordedAt:at(-4,18), temperatureCelsius:38.1, symptoms:["Quấy khóc","Ăn kém"], otherSymptom:"Ngủ không sâu", severity:"moderate", startedAt:at(-4,15), endedAt:at(-3,8), active:false, notes:"Gia đình đã liên hệ cơ sở y tế theo tình huống thực tế; nội dung chỉ minh họa." });
   addRecord(operations,babyId,"symptomRecords",{ recordedAt:at(0,8), temperatureCelsius:37.2, symptoms:["Nghẹt mũi"], otherSymptom:"", severity:"mild", startedAt:at(-1,20), endedAt:null, active:true, notes:"Đang theo dõi và ghi chép, không phải chẩn đoán." });
 
-  const vitaminId = newDocumentId(`babies/${babyId}/medications`);
-  const medicineId = newDocumentId(`babies/${babyId}/medications`);
+  const vitaminId = newDocumentId(getBabySubcollection(babyId, "medications"));
+  const medicineId = newDocumentId(getBabySubcollection(babyId, "medications"));
   addRecord(operations,babyId,"medications",{ name:"Vitamin D demo", category:"vitamin", dosage:"Theo đơn/hướng dẫn đã được gia đình nhập", unit:"giọt", route:"Uống", frequency:"Mỗi ngày", scheduledTimes:["08:00"], startDate:at(-180,8), endDate:null, prescribedBy:"BS. Demo", reason:"Bổ sung theo hướng dẫn chuyên môn được gia đình lưu lại", active:true, notes:"Ứng dụng không tự tính hoặc đề xuất liều." },vitaminId);
   addRecord(operations,babyId,"medications",{ name:"Thuốc demo đã kết thúc", category:"medicine", dosage:"Theo đơn bác sĩ", unit:"ml", route:"Uống", frequency:"Theo đơn", scheduledTimes:["08:00","20:00"], startDate:at(-20,8), endDate:at(-15,20), prescribedBy:"BS. Phạm An Demo", reason:"Nội dung lý do minh họa", active:false, notes:"Không sử dụng thông tin demo làm hướng dẫn dùng thuốc." },medicineId);
   addRecord(operations,babyId,"medicationLogs",{ medicationId:vitaminId, scheduledAt:at(-1,8), takenAt:at(-1,8,5), status:"taken", reaction:"Không ghi nhận", notes:"Vitamin D demo · đã ghi nhận" });

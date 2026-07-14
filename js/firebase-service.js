@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
 import { getFirestore, enableNetwork, disableNetwork } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
+import { getStorage } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-storage.js";
 import { firebaseConfig, validateFirebaseConfig } from "./firebase-config.js";
 
 let services = null;
@@ -17,7 +18,8 @@ export function initializeFirebase() {
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
-  services = { app, auth, db };
+  const storage = getStorage(app);
+  services = { app, auth, db, storage };
   return services;
 }
 

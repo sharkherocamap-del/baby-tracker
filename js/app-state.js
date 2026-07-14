@@ -1,6 +1,10 @@
 const initialState = Object.freeze({
   currentUser: null,
-  allowedUser: null,
+  userProfile: null,
+  workspaces: [],
+  currentWorkspaceId: null,
+  currentWorkspace: null,
+  currentMembership: null,
   currentRole: null,
   babies: [],
   selectedBabyId: null,
@@ -13,7 +17,7 @@ let state = { ...initialState };
 const subscribers = new Set();
 
 export function getState() {
-  return { ...state, babies: [...state.babies] };
+  return { ...state, babies: [...state.babies], workspaces: [...state.workspaces] };
 }
 
 export function setState(patch) {
@@ -29,11 +33,30 @@ export function subscribe(callback) {
   return () => subscribers.delete(callback);
 }
 
+export function setCurrentWorkspace(workspaceId) {
+  const entry = state.workspaces.find((item) => item.id === workspaceId) || null;
+  state = {
+    ...state,
+    currentWorkspaceId: entry?.id || null,
+    currentWorkspace: entry?.workspace || null,
+    currentMembership: entry?.membership || null,
+    currentRole: entry?.membership?.role || null,
+    babies: [],
+    selectedBabyId: null,
+    selectedBaby: null
+  };
+  if (entry?.id) localStorage.setItem("babyTracker.currentWorkspaceId", entry.id);
+  else localStorage.removeItem("babyTracker.currentWorkspaceId");
+  localStorage.removeItem("babyTracker.selectedBabyId");
+  subscribers.forEach((callback) => callback(getState()));
+}
+
 export function setSelectedBaby(babyId) {
   const baby = state.babies.find((item) => item.id === babyId) || null;
   state = { ...state, selectedBabyId: baby?.id || null, selectedBaby: baby };
-  if (baby?.id) localStorage.setItem("babyTracker.selectedBabyId", baby.id);
-  else localStorage.removeItem("babyTracker.selectedBabyId");
+  const key = state.currentWorkspaceId ? `babyTracker.selectedBabyId.${state.currentWorkspaceId}` : "babyTracker.selectedBabyId";
+  if (baby?.id) localStorage.setItem(key, baby.id);
+  else localStorage.removeItem(key);
   subscribers.forEach((callback) => callback(getState()));
 }
 

@@ -2,8 +2,8 @@ import { validateFirebaseConfig } from "./firebase-config.js";
 import { initializeFirebase } from "./firebase-service.js";
 import { initializeAuthPersistence, observeAuthState, signInWithGooglePopup, signOutCurrentUser } from "./auth.js";
 import { checkAllowedUser } from "./authorization.js";
-import { getState, resetState, setSelectedBaby, setState } from "./app-state.js";
-import { subscribeToCollection } from "./firestore-service.js";
+import { getState, resetState, setCurrentWorkspace, setSelectedBaby, setState } from "./app-state.js";
+import { getBabiesPath, subscribeToCollection } from "./firestore-service.js";
 import { initializeNavigation, destroyNavigation } from "./navigation.js";
 import { destroyRouter, initializeRouter, renderCurrentRoute } from "./router.js";
 import { friendlyErrorMessage, showToast } from "./toast.js";
@@ -24,12 +24,26 @@ function showOnly(name) {
   Object.entries(screens).forEach(([key, element]) => element.classList.toggle("hidden", key !== name));
 }
 
-function updateUserUi(user, profile) {
+function updateUserUi(user, profile, membership) {
   document.getElementById("user-name").textContent = profile.displayName || user.displayName || "Người dùng";
   document.getElementById("user-email").textContent = user.email || "";
-  document.getElementById("user-role").textContent = profile.role === "admin" ? "Admin" : "Member";
+  const roleLabels = { admin: "Admin", member: "Member", viewer: "Chỉ xem" };
+  document.getElementById("user-role").textContent = roleLabels[membership?.role] || "Thành viên";
   const avatar = document.getElementById("user-avatar");
   safeImage(avatar, user.photoURL, "./assets/images/baby-placeholder.svg");
+}
+
+function updateWorkspaceSelector(state = getState()) {
+  const selector = document.getElementById("workspace-selector");
+  selector.replaceChildren();
+  state.workspaces.forEach((entry) => {
+    const option = document.createElement("option");
+    option.value = entry.id;
+    option.textContent = entry.workspace.name;
+    option.selected = entry.id === state.currentWorkspaceId;
+    selector.append(option);
+  });
+  selector.disabled = state.workspaces.length <= 1;
 }
 
 function updateBabySelector(state = getState()) {
@@ -55,18 +69,38 @@ function updateBabySelector(state = getState()) {
 
 function startBabiesListener() {
   unsubscribeBabies?.();
-  unsubscribeBabies = subscribeToCollection("babies", { orderByField: "name", orderDirection: "asc", limit: 50 }, (babies) => {
-    const previousId = getState().selectedBabyId;
+  unsubscribeBabies = null;
+  if (!getState().currentWorkspaceId) return;
+  unsubscribeBabies = subscribeToCollection(getBabiesPath(), {
+    deletedMode: "active",
+    orderByField: "name",
+    orderDirection: "asc",
+    limit: 100
+  }, (babies) => {
+    const state = getState();
+    const previousId = state.selectedBabyId;
     setState({ babies });
-    const storedId = localStorage.getItem("babyTracker.selectedBabyId");
-    const nextId = babies.some((baby) => baby.id === previousId) ? previousId : babies.some((baby) => baby.id === storedId) ? storedId : babies[0]?.id || null;
+    const storedId = localStorage.getItem(`babyTracker.selectedBabyId.${state.currentWorkspaceId}`);
+    const nextId = babies.some((baby) => baby.id === previousId)
+      ? previousId
+      : babies.some((baby) => baby.id === storedId)
+        ? storedId
+        : babies[0]?.id || null;
     setSelectedBaby(nextId);
     updateBabySelector();
     if (!document.getElementById("app-shell").classList.contains("hidden")) renderCurrentRoute();
   }, (error) => {
     console.error(error);
-    showToast(friendlyErrorMessage(error, "Không thể tải danh sách em bé."), "error");
+    showToast(friendlyErrorMessage(error, "Không thể tải danh sách em bé trong workspace."), "error");
   });
+}
+
+function applyWorkspace(entry, user, profile) {
+  setCurrentWorkspace(entry.id);
+  document.documentElement.dataset.role = entry.membership.role;
+  updateWorkspaceSelector();
+  updateUserUi(user, profile, entry.membership);
+  startBabiesListener();
 }
 
 function stopAuthenticatedApp() {
@@ -85,25 +119,29 @@ async function handleAuthenticatedUser(user) {
     const result = await checkAllowedUser(user);
     if (runId !== authorizationRun) return;
     if (!result.allowed) {
-      showToast(result.reason, "warning", 6500);
+      showToast(result.reason, "warning", 7500);
       await signOutCurrentUser();
       return;
     }
-    const normalizedUser = { uid: user.uid, email: result.email, displayName: user.displayName || "", photoURL: user.photoURL || "" };
-    setState({ currentUser: normalizedUser, allowedUser: result.profile, currentRole: result.profile.role });
-    document.documentElement.dataset.role = result.profile.role;
-    updateUserUi(user, result.profile);
+    const normalizedUser = {
+      uid: user.uid,
+      email: result.email,
+      displayName: user.displayName || "",
+      photoURL: user.photoURL || ""
+    };
+    const storedWorkspaceId = localStorage.getItem("babyTracker.currentWorkspaceId");
+    const initialEntry = result.workspaces.find((item) => item.id === storedWorkspaceId) || result.workspaces[0];
+    setState({ currentUser: normalizedUser, userProfile: result.profile, workspaces: result.workspaces });
+    applyWorkspace(initialEntry, user, result.profile);
     showOnly("app");
     initializeNavigation();
-    startBabiesListener();
     initializeRouter();
   } catch (error) {
     console.error(error);
-    showToast(friendlyErrorMessage(error, "Không thể kiểm tra quyền truy cập."), "error", 7000);
+    showToast(friendlyErrorMessage(error, "Không thể kiểm tra quyền workspace."), "error", 8000);
     try { await signOutCurrentUser(); } catch (signOutError) { console.error(signOutError); }
   }
 }
-
 
 function updateThemeToggleIcon() {
   const icon = document.querySelector("#theme-toggle .material-symbols-rounded");
@@ -153,6 +191,16 @@ function bindStaticEvents() {
       menu.classList.add("hidden");
       menuButton.setAttribute("aria-expanded", "false");
     }
+  });
+
+  document.getElementById("workspace-selector").addEventListener("change", (event) => {
+    const state = getState();
+    const entry = state.workspaces.find((item) => item.id === event.target.value);
+    if (!entry) return;
+    applyWorkspace(entry, state.currentUser, state.userProfile);
+    initializeNavigation();
+    renderCurrentRoute();
+    showToast(`Đã chuyển sang workspace “${entry.workspace.name}”.`, "success");
   });
 
   document.getElementById("baby-selector").addEventListener("change", (event) => {
